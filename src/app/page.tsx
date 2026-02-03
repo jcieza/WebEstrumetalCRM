@@ -21,17 +21,6 @@ import IngestorPage from '@/components/crm/ingestor/IngestorPage';
 import GeminiChatPage from '@/components/crm/chat/GeminiChatPage';
 import PurchasesPage from '@/components/crm/purchases/PurchasesPage';
 
-// Placeholder for other modules
-const Placeholder = ({ name }: { name: string }) => (
-  <div className="flex flex-col items-center justify-center min-h-[60vh] text-gray-400 gap-4">
-    <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center animate-pulse text-lg">
-      🏗️
-    </div>
-    <h2 className="text-xl font-black text-gray-800 uppercase tracking-tight">Módulo {name}</h2>
-    <p className="text-xs font-bold uppercase tracking-widest text-gray-400">Migración en curso hacia arquitectura Next.js</p>
-  </div>
-);
-
 export default function CRMPage() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
