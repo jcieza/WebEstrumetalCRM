@@ -1,0 +1,92 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Palette - Estrumetal Brand (Green/Blue) - ORIGINAL 2024 */
+  --bg-main: #F4F7FE;
+  --bg-sidebar: linear-gradient(180deg, #1B5E20 0%, #0D47A1 100%);
+  --bg-card: #FFFFFF;
+
+  --primary: #2E7D32;
+  --primary-hover: #1B5E20;
+  --secondary: #1565C0;
+  --accent: #FF6B00;
+
+  --text-primary: #333333;
+  --text-secondary: #546E7A;
+  --text-on-dark: #FFFFFF;
+
+  --border-light: #E0E0E0;
+  --shadow-card: 0px 4px 20px rgba(0, 0, 0, 0.08);
+
+  /* Spacing & Metrics - Technical Industrial */
+  --sidebar-width: 260px;
+  --header-height: 70px;
+  --radius-technical: 12px;
+
+  /* Next.js Variables */
+  --background: var(--bg-main);
+  --foreground: var(--text-primary);
+}
+
+[data-theme='dark'] {
+  --bg-main: #0B0E14;
+  --bg-card: #161B22;
+  --bg-sidebar: linear-gradient(180deg, #091a0a 0%, #051937 100%);
+
+  --text-primary: #F0F6FC;
+  --text-secondary: #8B949E;
+  --border-light: #30363D;
+  --shadow-card: 0px 4px 24px rgba(0, 0, 0, 0.4);
+
+  --background: var(--bg-main);
+  --foreground: var(--text-primary);
+}
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: 'Outfit', 'Inter', 'Roboto', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Glassmorphism Utilities */
+.glass-effect {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.text-gradient {
+  background: linear-gradient(90deg, var(--primary) 0%, var(--secondary) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Industrial Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-main);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-light);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}

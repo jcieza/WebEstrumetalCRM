@@ -1,0 +1,71 @@
+{
+  "status": "success",
+  "result": [
+    {
+      "projectId": "ciaestrumetal",
+      "projectNumber": "320793305743",
+      "displayName": "CiaEstrumetal",
+      "name": "projects/ciaestrumetal",
+      "resources": {
+        "hostingSite": "ciaestrumetal"
+      },
+      "state": "ACTIVE",
+      "etag": "1_13a284c2-b7e9-4dbe-8bfe-68c7265c1548"
+    },
+    {
+      "projectId": "estrumetal-catalogo",
+      "projectNumber": "966560037961",
+      "displayName": "estrumetal-catalogo",
+      "name": "projects/estrumetal-catalogo",
+      "resources": {
+        "hostingSite": "estrumetal-catalogo"
+      },
+      "state": "ACTIVE",
+      "etag": "1_aeab4681-9e5f-4d3b-bebc-efcf6481c30e"
+    },
+    {
+      "projectId": "estrumetalonline",
+      "projectNumber": "360669507398",
+      "displayName": "EstrumetalOnline",
+      "name": "projects/estrumetalonline",
+      "resources": {
+        "hostingSite": "estrumetalonline"
+      },
+      "state": "ACTIVE",
+      "etag": "1_36094e86-6f3e-4d53-bfd6-0656575da8c8"
+    },
+    {
+      "projectId": "studio-2038720615-ceabd",
+      "projectNumber": "381648920403",
+      "displayName": "Firebase app",
+      "name": "projects/studio-2038720615-ceabd",
+      "resources": {
+        "hostingSite": "studio-2038720615-ceabd"
+      },
+      "state": "ACTIVE",
+      "etag": "1_5c2a8a31-e275-455b-9d25-8465b638cbda"
+    },
+    {
+      "projectId": "studio-5754068708-88764",
+      "projectNumber": "740268379412",
+      "displayName": "Firebase app",
+      "name": "projects/studio-5754068708-88764",
+      "resources": {
+        "hostingSite": "studio-5754068708-88764"
+      },
+      "state": "ACTIVE",
+      "etag": "1_cee8943e-87ed-48f8-95fa-2c50af8a9dae"
+    },
+    {
+      "projectId": "studio-7899503698-4d99e",
+      "projectNumber": "247759724136",
+      "displayName": "Firebase app",
+      "name": "projects/studio-7899503698-4d99e",
+      "resources": {
+        "hostingSite": "studio-7899503698-4d99e"
+      },
+      "state": "ACTIVE",
+      "etag": "1_9f18a8a6-f9fe-4171-a1b1-4fe9eb702ada"
+    }
+  ]
+}
