@@ -20,6 +20,7 @@ import WhatsAppPage from '@/components/crm/messages/WhatsAppPage';
 import IngestorPage from '@/components/crm/ingestor/IngestorPage';
 import GeminiChatPage from '@/components/crm/chat/GeminiChatPage';
 import PurchasesPage from '@/components/crm/purchases/PurchasesPage';
+import MailPage from '@/components/crm/mail/MailPage';
 
 export default function CRMPage() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -66,6 +67,8 @@ export default function CRMPage() {
         return <MarketIntelligencePage />;
       case 'messages':
         return <WhatsAppPage />;
+      case 'emails':
+        return <MailPage />;
       case 'ingestor':
         return <IngestorPage />;
       case 'chat':

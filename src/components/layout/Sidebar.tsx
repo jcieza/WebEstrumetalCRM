@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import {
     LayoutDashboard, Users, FileInput, MessageSquare, Settings,
     Truck, Globe, FileText, Package, BarChart3,
-    Calendar, Scroll, Wallet, ShoppingCart, Zap, LogOut
+    Calendar, Scroll, Wallet, ShoppingCart, Zap, LogOut, Mail
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -50,6 +50,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, collapsed = 
         { id: 'suppliers', label: 'Proveedores', icon: Truck },
         { id: 'purchases', label: 'Compras', icon: ShoppingCart },
         { id: 'messages', label: 'WhatsApp CRM', icon: MessageSquare },
+        { id: 'emails', label: 'Centro de Correos', icon: Mail },
         { id: 'ingestor', label: 'Ingestor IA', icon: FileInput },
         { id: 'chat', label: 'Gemini Chat', icon: MessageSquare, requiresSetting: 'geminiChat' },
     ];

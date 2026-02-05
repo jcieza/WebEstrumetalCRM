@@ -5,7 +5,7 @@ import Sidebar from './Sidebar';
 import {
     Home, Package, Settings as SettingsIcon, Users, Factory,
     FileText, Truck, DollarSign, BarChart3, Calendar, ShoppingCart,
-    ChevronUp, ChevronDown
+    ChevronUp, ChevronDown, Mail
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -54,6 +54,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
         { id: 'cash-receipts', label: 'Caja', icon: DollarSign, color: '#EF5350' },
         { id: 'purchases', label: 'Compras', icon: ShoppingCart, color: '#8D6E63' },
         { id: 'reports', label: 'Reportes', icon: BarChart3, color: '#00ACC1' },
+        { id: 'messages', label: 'Chat', icon: Home, color: '#42A5F5' }, // WhatsApp uses Home icon often or MessageSquare
+        { id: 'emails', label: 'Mail', icon: Mail, color: '#10B981' },
         { id: 'settings', label: 'Ajustes', icon: SettingsIcon, color: '#78909C' },
     ];
 

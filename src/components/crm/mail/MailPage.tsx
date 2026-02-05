@@ -1,0 +1,166 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { Mail, Search, Clock, User, ArrowRight, ShieldCheck, Inbox, Archive, Trash2, Send } from 'lucide-react';
+import { db } from '@/lib/firebase';
+import { collection, query, orderBy, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+
+interface EmailMessage {
+    id: string;
+    from: string;
+    subject: string;
+    body: string;
+    receivedAt: string;
+    status: 'NEW' | 'READ' | 'ARCHIVED';
+}
+
+const MailPage = () => {
+    const [messages, setMessages] = useState<EmailMessage[]>([]);
+    const [selectedMessage, setSelectedMessage] = useState<EmailMessage | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const q = query(collection(db, 'incoming_messages'), orderBy('receivedAt', 'desc'));
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const msgs = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            } as EmailMessage));
+            setMessages(msgs);
+            setLoading(false);
+        });
+
+        return () => unsubscribe();
+    }, []);
+
+    const markAsRead = async (id: string) => {
+        try {
+            await updateDoc(doc(db, 'incoming_messages', id), { status: 'READ' });
+        } catch (error) {
+            console.error('Error marking as read:', error);
+        }
+    };
+
+    return (
+        <div className="h-full flex flex-col gap-6">
+            {/* Header */}
+            <div className="flex justify-between items-center">
+                <div>
+                    <h1 className="text-3xl font-black text-slate-800 tracking-tight uppercase">Centro de Comunicaciones</h1>
+                    <p className="text-slate-400 text-sm mt-1 font-medium uppercase tracking-widest leading-none">Bandeja de Entrada @ciaestrumetal.com</p>
+                </div>
+                <div className="flex gap-4">
+                    <div className="bg-green-50 px-4 py-2 rounded-xl border border-green-100 flex items-center gap-2">
+                        <ShieldCheck size={18} className="text-green-600" />
+                        <span className="text-[10px] font-black text-green-700 uppercase tracking-tighter">Microservicio Activo</span>
+                    </div>
+                </div>
+            </div>
+
+            {/* Main Layout */}
+            <div className="flex-1 flex gap-6 overflow-hidden min-h-0">
+                {/* Inbox List */}
+                <div className="w-1/3 bg-white border border-slate-100 rounded-2xl shadow-sm flex flex-col overflow-hidden">
+                    <div className="p-4 border-b border-slate-50 flex items-center gap-3 bg-slate-50/50">
+                        <Inbox size={18} className="text-slate-400" />
+                        <span className="text-xs font-black uppercase text-slate-600">Mensajes Recientes</span>
+                        <span className="ml-auto bg-green-600 text-white px-2 py-0.5 rounded-full text-[9px] font-black">
+                            {messages.filter(m => m.status === 'NEW').length}
+                        </span>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto no-scrollbar">
+                        {loading ? (
+                            <div className="p-10 text-center animate-pulse">
+                                <div className="w-10 h-10 bg-slate-100 rounded-full mx-auto mb-4"></div>
+                                <div className="h-2 w-20 bg-slate-100 mx-auto rounded"></div>
+                            </div>
+                        ) : messages.length === 0 ? (
+                            <div className="p-20 text-center opacity-30">
+                                <Mail size={40} className="mx-auto mb-4" />
+                                <p className="text-[10px] font-bold uppercase">Sin mensajes nuevos</p>
+                            </div>
+                        ) : (
+                            messages.map(msg => (
+                                <button
+                                    key={msg.id}
+                                    onClick={() => {
+                                        setSelectedMessage(msg);
+                                        if (msg.status === 'NEW') markAsRead(msg.id);
+                                    }}
+                                    className={`w-full text-left p-4 border-b border-slate-50 transition-all hover:bg-slate-50 flex flex-col gap-1 ${selectedMessage?.id === msg.id ? 'bg-green-50/50 border-l-4 border-l-green-600' : ''}`}
+                                >
+                                    <div className="flex justify-between items-center">
+                                        <span className={`text-[10px] font-black uppercase tracking-tight ${msg.status === 'NEW' ? 'text-green-700' : 'text-slate-400'}`}>
+                                            {msg.from.split('<')[0] || msg.from}
+                                        </span>
+                                        <span className="text-[9px] text-slate-300 font-mono">
+                                            {new Date(msg.receivedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                    </div>
+                                    <h4 className={`text-xs truncate font-bold ${msg.status === 'NEW' ? 'text-slate-800' : 'text-slate-500'}`}>
+                                        {msg.subject || '(Sin Asunto)'}
+                                    </h4>
+                                    <p className="text-[10px] text-slate-400 line-clamp-1 italic">
+                                        {msg.body.substring(0, 60)}...
+                                    </p>
+                                </button>
+                            ))
+                        )}
+                    </div>
+                </div>
+
+                {/* Message Detail / Content */}
+                <div className="flex-1 bg-white border border-slate-100 rounded-2xl shadow-sm flex flex-col overflow-hidden">
+                    {selectedMessage ? (
+                        <>
+                            <div className="p-6 border-b border-slate-50 flex justify-between items-center">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 font-black">
+                                        {selectedMessage.from.charAt(0).toUpperCase()}
+                                    </div>
+                                    <div>
+                                        <h2 className="text-lg font-black text-slate-800 leading-none">{selectedMessage.subject}</h2>
+                                        <p className="text-xs text-slate-400 mt-1 font-medium">{selectedMessage.from}</p>
+                                    </div>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-xl transition-all border border-transparent hover:border-slate-100"><Archive size={20} /></button>
+                                    <button className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all border border-transparent hover:border-red-100"><Trash2 size={20} /></button>
+                                </div>
+                            </div>
+
+                            <div className="lex-1 p-8 overflow-y-auto text-slate-600 text-sm leading-relaxed whitespace-pre-wrap font-medium">
+                                {selectedMessage.body}
+
+                                <div className="mt-12 pt-8 border-t border-slate-50 flex flex-col gap-4">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <ArrowRight size={16} className="text-green-600" />
+                                        <span className="text-[10px] font-black uppercase text-slate-800">Responder como @ciaestrumetal.com</span>
+                                    </div>
+                                    <textarea
+                                        className="w-full h-32 p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none focus:ring-2 focus:ring-green-500/10 transition-all text-xs font-bold tracking-tight"
+                                        placeholder="Escribe tu respuesta aquí..."
+                                    ></textarea>
+                                    <button className="self-end px-8 py-3 bg-green-700 text-white rounded-2xl font-black text-[10px] uppercase tracking-[1.5px] shadow-xl shadow-green-100 hover:shadow-2xl transition-all flex items-center gap-2">
+                                        <Send size={16} />
+                                        Enviar Respuesta
+                                    </button>
+                                </div>
+                            </div>
+                        </>
+                    ) : (
+                        <div className="flex-1 flex flex-col items-center justify-center opacity-20 text-center p-20">
+                            <ArrowRight size={60} className="mb-4 text-slate-300" />
+                            <h3 className="text-xl font-black uppercase tracking-tighter">Selecciona un mensaje</h3>
+                            <p className="text-xs font-bold leading-relaxed px-10 mt-2 italic uppercase">Gestiona tu comunicación comercial desde una sola plataforma centralizada.</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export default MailPage;
