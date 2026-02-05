@@ -66,8 +66,8 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ order, onClose, o
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                             <div className="glass-card p-6 border-none shadow-sm bg-white">
                                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-2">Cliente</label>
-                                <p className="text-lg font-bold text-gray-800 leading-tight">{order.client_name}</p>
-                                <p className="text-xs text-gray-500 mt-1">{order.client_id}</p>
+                                <p className="text-lg font-bold text-gray-800 leading-tight">{order.clientName}</p>
+                                <p className="text-xs text-gray-500 mt-1">{order.clientId}</p>
                             </div>
                             <div className="glass-card p-6 border-none shadow-sm bg-white">
                                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-2">Entrega</label>
@@ -75,7 +75,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ order, onClose, o
                                     <div className="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center text-green-600">
                                         <Clock size={16} />
                                     </div>
-                                    <span className="text-lg font-bold text-gray-800">{order.delivery_date}</span>
+                                    <span className="text-lg font-bold text-gray-800">{order.deliveryDate}</span>
                                 </div>
                             </div>
                             <div className="glass-card p-6 border-none shadow-sm bg-white">

@@ -67,8 +67,8 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onUpdate, onEdit }) => {
                                     </div>
                                 )}
                             </div>
-                            <h3 className="font-black text-gray-800 text-sm leading-tight truncate group-hover:text-green-800 transition-colors uppercase tracking-tight" title={order.client_name}>
-                                {order.client_name}
+                            <h3 className="font-black text-gray-800 text-sm leading-tight truncate group-hover:text-green-800 transition-colors uppercase tracking-tight" title={order.clientName}>
+                                {order.clientName}
                             </h3>
                         </div>
 
@@ -81,7 +81,7 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onUpdate, onEdit }) => {
 
                     <div className="flex items-center gap-2 text-xs font-bold text-gray-400 mb-4 bg-gray-50/50 p-2 rounded-xl border border-gray-50">
                         <Clock size={14} className="text-green-600" />
-                        <span className="text-[10px] uppercase tracking-wide">Entrega: <span className="text-gray-900">{order.delivery_date}</span></span>
+                        <span className="text-[10px] uppercase tracking-wide">Entrega: <span className="text-gray-900">{order.deliveryDate}</span></span>
                     </div>
 
                     {/* Summary Card */}

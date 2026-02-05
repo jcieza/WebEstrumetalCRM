@@ -12,47 +12,21 @@ const InventoryPage = () => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // Mock data for demonstration
-        setItems([
-            {
-                id: '1',
-                code: 'MAT-2636',
-                name: "Juego de 5 discos de lija WING'S WW2115",
-                category: 'Consumibles',
-                stock: 12,
-                unit: 'juegos',
-                unit_price: 25,
-                condition: 'NUEVO',
-                purpose: 'ALMACENAR',
-                storage_years: 0,
-                warehouse_area: 'Planta 2',
-                warehouse_level: 2,
-                location_id: 'EST-A1',
-                image_path: '',
-                observations: 'Reponer pronto',
-                low_stock: true
-            },
-            {
-                id: '2',
-                code: 'MAT-1050',
-                name: 'Tubo Cuadrado 2" x 2" x 2mm',
-                category: 'Acero',
-                stock: 150,
-                unit: 'metros',
-                unit_price: 15.5,
-                condition: 'NUEVO',
-                purpose: 'ALMACENAR',
-                storage_years: 0,
-                warehouse_area: 'Planta 1',
-                warehouse_level: 1,
-                location_id: 'ZONA-A',
-                image_path: '',
-                observations: '',
-                low_stock: false
-            }
-        ]);
-        setLoading(false);
+        fetchItems();
     }, []);
+
+    const fetchItems = async () => {
+        setLoading(true);
+        try {
+            const res = await fetch('/api/inventory');
+            const data = await res.json();
+            setItems(data);
+        } catch (error) {
+            console.error("Error fetching inventory:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const filteredItems = items.filter(item =>
         item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||

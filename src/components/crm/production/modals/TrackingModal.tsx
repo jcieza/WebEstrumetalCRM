@@ -52,7 +52,7 @@ const TrackingModal: React.FC<TrackingModalProps> = ({ order, onClose, onUpdate 
                     <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-emerald-50/20">
                         <div>
                             <h3 className="text-xl font-bold text-gray-800">Seguimiento Dinámico</h3>
-                            <p className="text-xs text-gray-400 font-mono mt-0.5 tracking-widest">{order.id} | {order.client_name}</p>
+                            <p className="text-xs text-gray-400 font-mono mt-0.5 tracking-widest">{order.id} | {order.clientName}</p>
                         </div>
                         <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-xl transition-colors"><X size={20} /></button>
                     </div>

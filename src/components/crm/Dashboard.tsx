@@ -14,40 +14,59 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     const [clients, setClients] = useState<any[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [loading, setLoading] = useState(true);
-    const [lowStockCount, setLowStockCount] = useState(0);
+    const [stats, setStats] = useState({
+        closingProb: '0%',
+        pipeline: 'S/ 0',
+        lowStock: 0,
+        urgentOps: 0
+    });
 
     useEffect(() => {
         fetchClients();
-        // Placeholder for inventory stats
-        setLowStockCount(5);
+        fetchStats();
     }, []);
+
+    const fetchStats = async () => {
+        try {
+            // Fetch production orders for urgent count
+            const resProd = await fetch('/api/production');
+            const orders = await resProd.json();
+            const urgent = orders.filter((o: any) => o.priority === 'ALTA' && o.status !== 'ENTREGADO').length;
+
+            // Fetch quotations for pipeline
+            const resQuot = await fetch('/api/quotations');
+            const quots = await resQuot.json();
+            const totalPipeline = quots
+                .filter((q: any) => q.status === 'PENDIENTE' || q.status === 'EN SEGUIMIENTO')
+                .reduce((acc: number, q: any) => acc + (q.totalAmount || 0), 0);
+
+            // Average probability (demo logic or derived)
+            const prob = quots.length > 0 ? '75%' : '0%';
+
+            // Fetch inventory for low stock
+            const resInv = await fetch('/api/inventory');
+            const items = await resInv.json();
+            const low = items.filter((i: any) => i.stock < (i.min_stock || 10)).length;
+
+            setStats({
+                closingProb: prob,
+                pipeline: `S/ ${(totalPipeline / 1000).toFixed(0)}k`,
+                lowStock: low,
+                urgentOps: urgent
+            });
+        } catch (error) {
+            console.error("Error fetching dashboard stats:", error);
+        }
+    };
 
     const fetchClients = async (search = '') => {
         setLoading(true);
         try {
-            // Placeholder: Fetching from Firestore collection 'clients'
-            // In a real scenario, we'd use a server-side search or a structured index
-            const q = query(collection(db, 'clients'), limit(10));
-            const querySnapshot = await getDocs(q);
-            const clientsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-            // If empty, show mock data for demonstration
-            if (clientsData.length === 0) {
-                setClients([
-                    { id: '1', name: 'Corporación Aceros S.A.', ruc: '20100200301' },
-                    { id: '2', name: 'Metales Industriales del Perú', ruc: '20556677889' },
-                    { id: '3', name: 'Proyectos Estructurales Lima', ruc: '20443322110' },
-                ]);
-            } else {
-                setClients(clientsData);
-            }
+            const res = await fetch('/api/clients');
+            const clientsData = await res.json();
+            setClients(clientsData.slice(0, 10)); // Top 10 for dashboard
         } catch (error) {
             console.error("Error fetching clients:", error);
-            // Fallback mock data
-            setClients([
-                { id: '1', name: 'Demo Client A', ruc: '20000000001' },
-                { id: '2', name: 'Demo Client B', ruc: '20000000002' },
-            ]);
         } finally {
             setLoading(false);
         }
@@ -81,10 +100,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
 
             {/* KPIs */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <KPICard title="Prob. Cierre" value="85%" icon={TrendingUp} color="#10b981" />
-                <KPICard title="Pipeline" value="S/ 450k" icon={DollarSign} color="#3b82f6" />
-                <KPICard title="Alertas Stock" value={lowStockCount} icon={AlertTriangle} color="#f97316" />
-                <KPICard title="Urgencias OPs" value="3" icon={Clock} color="#6366f1" />
+                <KPICard title="Prob. Cierre" value={stats.closingProb} icon={TrendingUp} color="#10b981" />
+                <KPICard title="Pipeline" value={stats.pipeline} icon={DollarSign} color="#3b82f6" />
+                <KPICard title="Alertas Stock" value={stats.lowStock} icon={AlertTriangle} color="#f97316" />
+                <KPICard title="Urgencias OPs" value={stats.urgentOps} icon={Clock} color="#6366f1" />
             </div>
 
             {/* Main Content */}

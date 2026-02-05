@@ -23,36 +23,18 @@ const ClientList: React.FC<ClientListProps> = ({ onNavigate }) => {
     const fetchClients = async () => {
         setLoading(true);
         try {
-            // In the future, this will fetch from Firestore
-            const q = query(collection(db, 'clients'), orderBy('name', 'asc'));
-            const querySnapshot = await getDocs(q);
-            const clientsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client));
+            const res = await fetch('/api/clients');
+            const data = await res.json();
 
-            if (clientsData.length === 0) {
-                // Mock data for demonstration
-                setClients([
-                    {
-                        id: 'CL-001',
-                        name: 'Aceros Industriales SAC',
-                        ruc: '20504030201',
-                        address: 'Av. Industrial 450, Lima',
-                        contacts: [],
-                        sales: [],
-                        dna: { preferences: ['Acero H', 'Entrega Rápida'], segment: 'Industrial' }
-                    },
-                    {
-                        id: 'CL-002',
-                        name: 'Constructora del Sur',
-                        ruc: '20123456789',
-                        address: 'Calle Los Cedros 123, Arequipa',
-                        contacts: [],
-                        sales: [],
-                        dna: { preferences: ['Planchas 1/2"', 'Crédito 30d'], segment: 'Construcción' }
-                    }
-                ]);
-            } else {
-                setClients(clientsData);
-            }
+            // Map data to ensure dna and other nested fields exist
+            const formatted = data.map((c: any) => ({
+                ...c,
+                dna: c.dna || { segment: 'Nuevo', preferences: [] },
+                ruc: c.ruc || 'S/N',
+                address: c.address || 'Sin dirección'
+            }));
+
+            setClients(formatted);
         } catch (err) {
             console.error("Error fetching clients:", err);
         } finally {

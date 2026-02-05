@@ -24,45 +24,9 @@ const ProductionBoard: React.FC<ProductionBoardProps> = ({ onEdit }) => {
         setLoading(true);
         try {
             setError(null);
-            // In the future, this will fetch from Firestore
-            const q = query(collection(db, 'production_orders'), orderBy('delivery_date', 'asc'));
-            const querySnapshot = await getDocs(q);
-            const ordersData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ProductionOrder));
-
-            if (ordersData.length === 0) {
-                // Mock data for demonstration
-                setOrders([
-                    {
-                        id: 'OP-024-2026',
-                        client_id: 'CL-001',
-                        client_name: 'Aceros Industriales SAC',
-                        emission_date: '2026-02-01',
-                        delivery_date: '2026-02-15',
-                        priority: 'URGENTE',
-                        status: 'EN PROCESO',
-                        general_progress: 45,
-                        items: [
-                            { description: 'VIGAS EN H 10"', qty: 4, unit: 'unid', processes: [{ name: 'Corte', completed: true }, { name: 'Soldadura', completed: false }] },
-                            { description: 'PLACAS BASE 1/2"', qty: 12, unit: 'unid', progress: { packed: true } }
-                        ]
-                    },
-                    {
-                        id: 'OP-025-2026',
-                        client_id: 'CL-002',
-                        client_name: 'Constructora del Sur',
-                        emission_date: '2026-02-02',
-                        delivery_date: '2026-02-20',
-                        priority: 'MEDIA',
-                        status: 'PENDIENTE',
-                        general_progress: 10,
-                        items: [
-                            { description: 'TUBO CUADRADO 2"', qty: 50, unit: 'barras' }
-                        ]
-                    }
-                ]);
-            } else {
-                setOrders(ordersData);
-            }
+            const res = await fetch('/api/production');
+            const ordersData = await res.json();
+            setOrders(ordersData);
         } catch (err) {
             console.error("Error fetching board:", err);
             setError("Error al cargar el tablero de producción.");

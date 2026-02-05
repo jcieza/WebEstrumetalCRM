@@ -17,16 +17,29 @@ const CashReceiptsPage = () => {
     const [filterType, setFilterType] = useState<'ALL' | 'INGRESO' | 'EGRESO'>('ALL');
 
     useEffect(() => {
-        // Mock data
-        setTimeout(() => {
-            setReceipts([
-                { id: 'R-001', date: '2024-02-01', type: 'INGRESO', concept: 'Pago Cotización COT-2024-001', entity: 'SHOPSMART SAC', amount: 1500, handled_by: 'Administración' },
-                { id: 'R-002', date: '2024-02-02', type: 'EGRESO', concept: 'Compra de Insumos Soldadura', entity: 'Ferretería Central', amount: 450, handled_by: 'Mauro Puma' },
-                { id: 'R-003', date: '2024-02-03', type: 'INGRESO', concept: 'Adelanto Proyecto Estructuras', entity: 'Constructora del Sur', amount: 5000, handled_by: 'Administración' },
-            ]);
-            setLoading(false);
-        }, 800);
+        fetchReceipts();
     }, []);
+
+    const fetchReceipts = async () => {
+        setLoading(true);
+        try {
+            const res = await fetch('/api/cash');
+            const data = await res.json();
+
+            // Map data to ensure consistency with UI fields if needed
+            const formatted = data.map((r: any) => ({
+                ...r,
+                entity: r.customer_name || r.supplier_name || r.entity || 'Sin Identificar',
+                handled_by: r.received_by || r.handled_by || 'Administración'
+            }));
+
+            setReceipts(formatted);
+        } catch (error) {
+            console.error("Error fetching cash receipts:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const stats = {
         income: receipts.filter(r => r.type === 'INGRESO').reduce((sum, r) => sum + r.amount, 0),

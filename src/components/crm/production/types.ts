@@ -14,10 +14,10 @@ export interface ProductionItem {
 
 export interface ProductionOrder {
     id: string;
-    client_id: string;
-    client_name: string;
-    emission_date: string;
-    delivery_date: string;
+    clientId: string;
+    clientName: string;
+    issueDate: string;
+    deliveryDate: string;
     priority: 'URGENTE' | 'ALTA' | 'MEDIA' | 'PROGRAMADO';
     status: 'EN PROCESO' | 'PENDIENTE' | 'TERMINADO' | 'ENTREGADO' | 'DETENIDO';
     items: ProductionItem[];

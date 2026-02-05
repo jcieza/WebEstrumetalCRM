@@ -15,29 +15,29 @@ const ClientView: React.FC<ClientViewProps> = ({ clientId, onBack }) => {
     const [activeTab, setActiveTab] = useState<'overview' | 'contacts' | 'sales'>('overview');
 
     useEffect(() => {
-        // Mock detail fetch
-        setClient({
-            id: clientId,
-            name: 'Aceros Industriales SAC',
-            ruc: '20504030201',
-            address: 'Av. Industrial 450, Lima',
-            contacts: [
-                { name: 'Ing. Carlos Mendez', phone: '+51 987 654 321', email: 'cmendez@acerosind.pe', dni: '45678901' },
-                { name: 'Lic. Ana Paredes', phone: '+51 912 345 678', email: 'compras@acerosind.pe' }
-            ],
-            sales: [
-                { ID_COTIZACION: 'COT-2024-001', FECHA_EMISION: '2024-01-15', RESUMEN_MARKETING: 'Vigas H y Planchas', ESTADO_PROBABLE: 'ENTREGADO' },
-                { ID_COTIZACION: 'COT-2024-002', FECHA_EMISION: '2024-02-10', RESUMEN_MARKETING: 'Estructuras Prototipo', ESTADO_PROBABLE: 'PENDIENTE' }
-            ],
-            dna: {
-                preferences: ['Acero H', 'Entrega Rápida', 'Galvanizado', 'Atención Técnica'],
-                segment: 'Industrial Heavy Duty'
-            },
-            alert: {
-                type: 'danger',
-                message: 'Inactividad detectada: No solicita cotizaciones hace 45 días.'
+        const fetchClientDetail = async () => {
+            try {
+                const res = await fetch(`/api/clients/${clientId}`);
+                const data = await res.json();
+
+                // Ensure DNA exists for UI
+                setClient({
+                    ...data,
+                    dna: data.dna || {
+                        segment: 'Nuevo Prospecto',
+                        preferences: ['Análisis en proceso por IA']
+                    },
+                    alert: data.alert || {
+                        type: 'success',
+                        message: 'Cliente en buen estado operativo.'
+                    }
+                });
+            } catch (error) {
+                console.error("Error fetching client detail:", error);
             }
-        });
+        };
+
+        fetchClientDetail();
     }, [clientId]);
 
     if (!client) return (
