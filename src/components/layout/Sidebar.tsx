@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '@/context/AuthContext';
 import {
     LayoutDashboard, Users, FileInput, MessageSquare, Settings,
     Truck, Globe, FileText, Package, BarChart3,
-    Calendar, Scroll, Wallet, ShoppingCart, Zap
+    Calendar, Scroll, Wallet, ShoppingCart, Zap, LogOut
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -15,6 +16,7 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, collapsed = false }) => {
+    const { user, logout } = useAuth();
     const [showGeminiChat, setShowGeminiChat] = useState(true);
     const [showGems, setShowGems] = useState(true);
 
@@ -112,7 +114,23 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, collapsed = 
             </div>
 
             {/* Bottom Actions */}
-            <div className="border-t border-white/10 p-2">
+            <div className="border-t border-white/10 p-2 flex flex-col gap-1">
+                {user && !collapsed && (
+                    <div className="px-3 py-4 flex items-center gap-3 border-b border-white/5 mb-2">
+                        {user.photoURL ? (
+                            <img src={user.photoURL} alt="User" className="w-8 h-8 rounded-full border border-white/20" />
+                        ) : (
+                            <div className="w-8 h-8 rounded-full bg-green-700 flex items-center justify-center text-xs font-bold">
+                                {user.email?.charAt(0).toUpperCase()}
+                            </div>
+                        )}
+                        <div className="flex-1 overflow-hidden">
+                            <p className="text-[11px] font-bold truncate leading-none mb-1">{user.displayName || 'Usuario'}</p>
+                            <p className="text-[9px] text-white/40 truncate leading-none uppercase tracking-tighter">Administrador</p>
+                        </div>
+                    </div>
+                )}
+
                 <button
                     onClick={() => setActiveTab('settings')}
                     className={`
@@ -126,6 +144,18 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, collapsed = 
                 >
                     <Settings size={20} className="flex-shrink-0" />
                     {!collapsed && <span className="text-sm">Configuración</span>}
+                </button>
+
+                <button
+                    onClick={logout}
+                    className={`
+                        flex items-center gap-3 p-3 rounded-lg w-full transition-all text-red-300 hover:bg-red-500/10 hover:text-red-200
+                        ${collapsed ? 'justify-center' : 'justify-start'}
+                    `}
+                    style={{ borderLeft: '4px solid transparent' }}
+                >
+                    <LogOut size={20} className="flex-shrink-0" />
+                    {!collapsed && <span className="text-sm">Cerrar Sesión</span>}
                 </button>
             </div>
         </motion.div>

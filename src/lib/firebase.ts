@@ -11,11 +11,14 @@ const firebaseConfig = {
     appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
+import { Firestore } from "firebase/firestore";
+import { Auth } from "firebase/auth";
+
 // Initialize Firebase
 let app;
-let db: any;
-let auth: any;
-let googleProvider: any;
+let db: Firestore;
+let auth: Auth;
+let googleProvider: GoogleAuthProvider;
 
 if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "your_api_key") {
     app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
@@ -24,10 +27,9 @@ if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "your_api_key") {
     googleProvider = new GoogleAuthProvider();
 } else {
     console.warn("Firebase API Key is missing. Check your .env.local file.");
-    // Provide empty/mock objects to avoid crashes in components
-    db = {};
-    auth = {};
-    googleProvider = {};
+    db = {} as any;
+    auth = {} as any;
+    googleProvider = {} as any;
 }
 
 export { app, db, auth, googleProvider };

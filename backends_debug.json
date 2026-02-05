@@ -1,0 +1,28 @@
+﻿{
+  "status": "success",
+  "result": [
+    {
+      "name": "projects/estrumetalonline/locations/us-central1/backends/devdealis",
+      "createTime": "2026-02-03T18:33:15.784360498Z",
+      "updateTime": "2026-02-05T17:12:29.713848Z",
+      "uri": "devdealis--estrumetalonline.us-central1.hosted.app",
+      "managedResources": [
+        {
+          "runService": {
+            "service": "projects/360669507398/locations/us-central1/services/devdealis"
+          }
+        }
+      ],
+      "codebase": {
+        "repository": "projects/estrumetalonline/locations/us-central1/connections/apphosting-github-conn-95pre36/gitRepositoryLinks/jcieza-WebEstrumetalCRM",
+        "rootDirectory": "/"
+      },
+      "uid": "ca6ef58d-dbe1-4c43-8beb-17f27317a829",
+      "etag": "48ZyHbUwFsIE2JLq9paR4510R_Jo1AjgHCJKLairaIg",
+      "reconciling": false,
+      "servingLocality": "GLOBAL_ACCESS",
+      "serviceAccount": "firebase-app-hosting-compute@estrumetalonline.iam.gserviceaccount.com",
+      "appId": "1:360669507398:web:b779339bd0ec8264fc3f47"
+    }
+  ]
+}
