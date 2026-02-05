@@ -5,8 +5,14 @@ env:
   # Secrets (Configured in Google Cloud Secret Manager via Firebase Console)
   - variable: FIREBASE_PRIVATE_KEY
     secret: FIREBASE_PRIVATE_KEY
+    availability:
+      - BUILD
+      - RUNTIME
   - variable: FIREBASE_CLIENT_EMAIL
     secret: FIREBASE_CLIENT_EMAIL
+    availability:
+      - BUILD
+      - RUNTIME
   
   # Standard Environment Variables
   - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
