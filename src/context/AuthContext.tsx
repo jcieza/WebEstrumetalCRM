@@ -21,9 +21,10 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Whitelist of authorized emails
-const AUTHORIZED_EMAILS = [
-    'jciezalujan@gmail.com'
+// Whitelist of authorized users (can be email or UID for extra security)
+const AUTHORIZED_USERS = [
+    'jciezalujan@gmail.com',
+    's7Mtyvp9mOc6aQUT2XxZcrgajZl1' // Benjamin's Specific UID
 ];
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -48,7 +49,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const unsubscribe = onAuthStateChanged(auth, (user) => {
             if (user) {
                 setUser(user);
-                setAuthorized(AUTHORIZED_EMAILS.includes(user.email || ''));
+                const isAuthorized = AUTHORIZED_USERS.includes(user.email || '') ||
+                    AUTHORIZED_USERS.includes(user.uid);
+                setAuthorized(isAuthorized);
             } else {
                 setUser(null);
                 setAuthorized(false);
