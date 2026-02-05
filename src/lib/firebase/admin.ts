@@ -3,14 +3,22 @@ import * as admin from 'firebase-admin';
 const getParsedValue = (value: string, field: string) => {
     if (!value) return '';
     try {
+        // Try parsing as JSON first
         const parsed = JSON.parse(value);
-        return parsed[field] || value;
-    } catch (e) {
-        if (field === 'private_key') {
-            return value.replace(/\\n/g, '\n').replace(/"/g, '');
+        if (typeof parsed === 'object' && parsed !== null) {
+            return parsed[field] || value;
         }
-        return value.replace(/"/g, '');
+        // If it was just a quoted string, fall through
+        value = String(parsed);
+    } catch (e) {
+        // Not a JSON object, proceed with manual cleaning
     }
+
+    if (field === 'private_key') {
+        // Handle escaped newlines and remove surrounding quotes if any
+        return value.replace(/\\n/g, '\n').replace(/^"|"$/g, '').trim();
+    }
+    return value.replace(/^"|"$/g, '').trim();
 };
 
 const firebaseAdminConfig = {
