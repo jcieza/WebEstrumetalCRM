@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
         return NextResponse.json(records);
     } catch (error: any) {
         console.error('Error fetching cash records:', error);
-        return NextResponse.json({ error: 'Failed to fetch cash records' }, { status: 500 });
+        return NextResponse.json([], { status: 500 });
     }
 }
 

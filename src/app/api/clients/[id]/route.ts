@@ -39,6 +39,6 @@ export async function GET(
         });
     } catch (error: any) {
         console.error('Error fetching client detail:', error);
-        return NextResponse.json({ error: 'Failed to fetch client detail' }, { status: 500 });
+        return NextResponse.json(null, { status: 500 });
     }
 }

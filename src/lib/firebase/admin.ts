@@ -1,8 +1,21 @@
 import * as admin from 'firebase-admin';
 
+const getParsedValue = (value: string, field: string) => {
+    if (!value) return '';
+    try {
+        const parsed = JSON.parse(value);
+        return parsed[field] || value;
+    } catch (e) {
+        if (field === 'private_key') {
+            return value.replace(/\\n/g, '\n').replace(/"/g, '');
+        }
+        return value.replace(/"/g, '');
+    }
+};
+
 const firebaseAdminConfig = {
-    privateKey: (process.env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
-    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+    privateKey: getParsedValue(process.env.FIREBASE_PRIVATE_KEY || '', 'private_key'),
+    clientEmail: getParsedValue(process.env.FIREBASE_CLIENT_EMAIL || '', 'client_email'),
     projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
 };
 
@@ -15,18 +28,12 @@ if (!admin.apps.length) {
                 credential: admin.credential.cert(firebaseAdminConfig as any),
                 storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
             });
-            console.log('Firebase Admin initialized successfully in production.');
+            console.log('Firebase Admin initialized successfully.');
         } catch (error) {
             console.error('Firebase admin initialization error:', error);
         }
     } else {
-        const missing = [];
-        if (!firebaseAdminConfig.projectId) missing.push('NEXT_PUBLIC_FIREBASE_PROJECT_ID');
-        if (!firebaseAdminConfig.clientEmail) missing.push('FIREBASE_CLIENT_EMAIL');
-        if (!firebaseAdminConfig.privateKey) missing.push('FIREBASE_PRIVATE_KEY');
-
-        console.warn(`Firebase Admin credentials incomplete. Missing: ${missing.join(', ')}`);
-        console.warn('Check App Hosting environment variables and secrets configuration.');
+        console.warn(`Firebase Admin incomplete. Missing fields in production environment.`);
     }
 }
 
