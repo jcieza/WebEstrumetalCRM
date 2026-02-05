@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase/admin';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
     try {
         const snapshot = await adminDb.collection('production_orders')
             .orderBy('issueDate', 'desc')
             .get();
 
-        const orders = snapshot.docs.map(doc => ({
+        const orders = snapshot.docs.map((doc: any) => ({
             id: doc.id,
             ...doc.data()
         }));

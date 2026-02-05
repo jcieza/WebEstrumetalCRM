@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase/admin';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
     try {
         const { searchParams } = new URL(req.url);
@@ -13,12 +15,12 @@ export async function GET(req: NextRequest) {
         }
 
         const snapshot = await query.orderBy('issueDate', 'desc').get();
-        const items = snapshot.docs.map((doc: any) => ({
+        const quots = snapshot.docs.map((doc: any) => ({
             id: doc.id,
             ...doc.data()
         }));
 
-        return NextResponse.json(items);
+        return NextResponse.json(quots);
     } catch (error: any) {
         console.error('Error fetching quotations:', error);
         return NextResponse.json({ error: 'Failed to fetch quotations' }, { status: 500 });

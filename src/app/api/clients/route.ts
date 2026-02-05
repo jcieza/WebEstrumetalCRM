@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase/admin';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
     try {
         const snapshot = await adminDb.collection('clients').orderBy('name').get();
-        const clients = snapshot.docs.map(doc => ({
+        const clients = snapshot.docs.map((doc: any) => ({
             id: doc.id,
             ...doc.data()
         }));

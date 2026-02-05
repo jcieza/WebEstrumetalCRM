@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase/admin';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(
     req: NextRequest,
     { params }: { params: { id: string } }
@@ -19,7 +21,7 @@ export async function GET(
         const contactsSnapshot = await adminDb.collection('contacts')
             .where('clientId', '==', clientId)
             .get();
-        const contacts = contactsSnapshot.docs.map(doc => doc.data());
+        const contacts = contactsSnapshot.docs.map((doc: any) => doc.data());
 
         // Fetch Sales/Quotations
         const salesSnapshot = await adminDb.collection('quotations')
@@ -27,7 +29,7 @@ export async function GET(
             .orderBy('issueDate', 'desc')
             .limit(20)
             .get();
-        const sales = salesSnapshot.docs.map(doc => doc.data());
+        const sales = salesSnapshot.docs.map((doc: any) => doc.data());
 
         return NextResponse.json({
             id: clientId,

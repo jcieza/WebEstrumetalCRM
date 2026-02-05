@@ -6,18 +6,25 @@ const firebaseAdminConfig = {
     projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
 };
 
+const isConfigComplete = firebaseAdminConfig.projectId && firebaseAdminConfig.clientEmail && firebaseAdminConfig.privateKey;
+
 if (!admin.apps.length) {
-    try {
-        admin.initializeApp({
-            credential: admin.credential.cert(firebaseAdminConfig),
-            storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-        });
-    } catch (error) {
-        console.error('Firebase admin initialization error', error);
+    if (isConfigComplete) {
+        try {
+            admin.initializeApp({
+                credential: admin.credential.cert(firebaseAdminConfig as any),
+                storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+            });
+        } catch (error) {
+            console.error('Firebase admin initialization error:', error);
+        }
+    } else {
+        console.warn('Firebase Admin credentials not fully configured. This is expected during build if secrets are not available.');
     }
 }
 
-export const adminDb = admin.firestore();
-export const adminAuth = admin.auth();
-export const adminStorage = admin.storage();
+// Export initialized services or null/proxy if not configured
+export const adminDb = isConfigComplete ? admin.firestore() : null as any;
+export const adminAuth = isConfigComplete ? admin.auth() : null as any;
+export const adminStorage = isConfigComplete ? admin.storage() : null as any;
 export { admin };
