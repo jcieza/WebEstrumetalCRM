@@ -32,8 +32,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [authorized, setAuthorized] = useState(false);
 
     useEffect(() => {
+        if (!auth || typeof auth.onAuthStateChanged !== 'function') {
+            console.error("Auth is not properly initialized. Check Firebase config.");
+            setLoading(false);
+            return;
+        }
+
         // Ensure persistence
-        setPersistence(auth, browserLocalPersistence);
+        try {
+            setPersistence(auth, browserLocalPersistence);
+        } catch (err) {
+            console.error("Failed to set persistence:", err);
+        }
 
         const unsubscribe = onAuthStateChanged(auth, (user) => {
             if (user) {

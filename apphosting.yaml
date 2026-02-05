@@ -14,14 +14,24 @@ env:
       - BUILD
       - RUNTIME
   
-  # Standard Environment Variables
+  # Frontend Firebase Config (Essential for Client-Side SDK)
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: AIzaSyCvF7pVHLIYnElsXtKZJRyyxfyHjVdXzec
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: estrumetalonline.firebaseapp.com
   - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
     value: estrumetalonline
   - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
     value: estrumetalonline.firebasestorage.app
+  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    value: "360669507398"
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: "1:360669507398:web:b779339bd0ec8264fc3f47"
+
+  # Standard Environment Variables
   - variable: DRIVE_PDF_FOLDER_ID
-    value: 1R_ZxP2uhm9aiOF70NhEEpigwrDQsavtW
+    value: 1oFU-8i4B3bxbsrShinJynVgJzXtVJPH_
   - variable: DRIVE_EXCEL_FOLDER_ID
     value: 1EsH1s2AMhlzqzFdK8EnZFeziw__CGcg7
   - variable: DRIVE_CSV_FOLDER_ID
-    value: 1fX8S0dG3v9M4-9_496g9VvO_2y9wJ8Uj
+    value: 1R_ZxP2uhm9aiOF70NhEEpigwrDQsavtW
