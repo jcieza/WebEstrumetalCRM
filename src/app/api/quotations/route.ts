@@ -28,6 +28,6 @@ export async function GET(req: NextRequest) {
         return NextResponse.json(quots);
     } catch (error: any) {
         console.error('Error fetching quotations:', error);
-        return NextResponse.json({ error: 'Failed to fetch quotations' }, { status: 500 });
+        return NextResponse.json([], { status: 500 });
     }
 }

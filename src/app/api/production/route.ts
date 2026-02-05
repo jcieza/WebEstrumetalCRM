@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
         return NextResponse.json(orders);
     } catch (error: any) {
         console.error('Error fetching production orders:', error);
-        return NextResponse.json({ error: 'Failed to fetch production orders' }, { status: 500 });
+        return NextResponse.json([], { status: 500 });
     }
 }
 

@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
         return NextResponse.json(clients);
     } catch (error: any) {
         console.error('Error fetching clients:', error);
-        return NextResponse.json({ error: 'Failed to fetch clients' }, { status: 500 });
+        return NextResponse.json([], { status: 500 });
     }
 }
 

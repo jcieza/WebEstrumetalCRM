@@ -26,7 +26,12 @@ const ProductionBoard: React.FC<ProductionBoardProps> = ({ onEdit }) => {
             setError(null);
             const res = await fetch('/api/production');
             const ordersData = await res.json();
-            setOrders(ordersData);
+            if (Array.isArray(ordersData)) {
+                setOrders(ordersData);
+            } else {
+                setOrders([]);
+                setError("La respuesta del servidor no es válida.");
+            }
         } catch (err) {
             console.error("Error fetching board:", err);
             setError("Error al cargar el tablero de producción.");
