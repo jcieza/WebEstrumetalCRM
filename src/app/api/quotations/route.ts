@@ -5,6 +5,11 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
     try {
+        if (!adminDb) {
+            console.error('Database connection not initialized');
+            return NextResponse.json([]);
+        }
+
         const { searchParams } = new URL(req.url);
         const clientId = searchParams.get('clientId');
 

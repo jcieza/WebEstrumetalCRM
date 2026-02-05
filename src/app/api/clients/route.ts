@@ -5,6 +5,11 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
     try {
+        if (!adminDb) {
+            console.error('Database connection not initialized');
+            return NextResponse.json([]);
+        }
+
         const snapshot = await adminDb.collection('clients').orderBy('name').get();
         const clients = snapshot.docs.map((doc: any) => ({
             id: doc.id,

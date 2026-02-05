@@ -1,0 +1,21 @@
+# Firebase App Hosting configuration
+# This file maps your cloud secrets to environment variables accessible by the code.
+
+env:
+  # Secrets (Configured in Google Cloud Secret Manager via Firebase Console)
+  - variable: FIREBASE_PRIVATE_KEY
+    secret: FIREBASE_PRIVATE_KEY
+  - variable: FIREBASE_CLIENT_EMAIL
+    secret: FIREBASE_CLIENT_EMAIL
+  
+  # Standard Environment Variables
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: estrumetalonline
+  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    value: estrumetalonline.firebasestorage.app
+  - variable: DRIVE_PDF_FOLDER_ID
+    value: 1R_ZxP2uhm9aiOF70NhEEpigwrDQsavtW
+  - variable: DRIVE_EXCEL_FOLDER_ID
+    value: 1EsH1s2AMhlzqzFdK8EnZFeziw__CGcg7
+  - variable: DRIVE_CSV_FOLDER_ID
+    value: 1fX8S0dG3v9M4-9_496g9VvO_2y9wJ8Uj

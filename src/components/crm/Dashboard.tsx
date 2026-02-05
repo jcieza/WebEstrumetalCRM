@@ -31,22 +31,23 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
             // Fetch production orders for urgent count
             const resProd = await fetch('/api/production');
             const orders = await resProd.json();
-            const urgent = orders.filter((o: any) => o.priority === 'ALTA' && o.status !== 'ENTREGADO').length;
+            const urgent = Array.isArray(orders) ? orders.filter((o: any) => o.priority === 'ALTA' && o.status !== 'ENTREGADO').length : 0;
 
             // Fetch quotations for pipeline
             const resQuot = await fetch('/api/quotations');
             const quots = await resQuot.json();
-            const totalPipeline = quots
+            const quotsArray = Array.isArray(quots) ? quots : [];
+            const totalPipeline = quotsArray
                 .filter((q: any) => q.status === 'PENDIENTE' || q.status === 'EN SEGUIMIENTO')
                 .reduce((acc: number, q: any) => acc + (q.totalAmount || 0), 0);
 
             // Average probability (demo logic or derived)
-            const prob = quots.length > 0 ? '75%' : '0%';
+            const prob = quotsArray.length > 0 ? '75%' : '0%';
 
             // Fetch inventory for low stock
             const resInv = await fetch('/api/inventory');
             const items = await resInv.json();
-            const low = items.filter((i: any) => i.stock < (i.min_stock || 10)).length;
+            const low = Array.isArray(items) ? items.filter((i: any) => i.stock < (i.min_stock || 10)).length : 0;
 
             setStats({
                 closingProb: prob,
@@ -64,9 +65,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
         try {
             const res = await fetch('/api/clients');
             const clientsData = await res.json();
-            setClients(clientsData.slice(0, 10)); // Top 10 for dashboard
+            if (Array.isArray(clientsData)) {
+                setClients(clientsData.slice(0, 10)); // Top 10 for dashboard
+            } else {
+                setClients([]);
+            }
         } catch (error) {
             console.error("Error fetching clients:", error);
+            setClients([]);
         } finally {
             setLoading(false);
         }
@@ -160,7 +166,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                 {/* mini Chart */}
                 <div className="bg-white border border-gray-100 rounded-lg p-6 shadow-sm">
                     <h3 className="text-sm font-black uppercase tracking-wider text-gray-700 mb-6 border-b border-gray-50 pb-4">Proyección de Ingresos</h3>
-                    <div className="h-[300px] w-full">
+                    <div className="h-[300px] w-full min-h-[300px] min-w-0">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={[
                                 { name: 'Ene', v: 4000 },

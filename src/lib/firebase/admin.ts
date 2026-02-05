@@ -15,11 +15,18 @@ if (!admin.apps.length) {
                 credential: admin.credential.cert(firebaseAdminConfig as any),
                 storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
             });
+            console.log('Firebase Admin initialized successfully in production.');
         } catch (error) {
             console.error('Firebase admin initialization error:', error);
         }
     } else {
-        console.warn('Firebase Admin credentials not fully configured. This is expected during build if secrets are not available.');
+        const missing = [];
+        if (!firebaseAdminConfig.projectId) missing.push('NEXT_PUBLIC_FIREBASE_PROJECT_ID');
+        if (!firebaseAdminConfig.clientEmail) missing.push('FIREBASE_CLIENT_EMAIL');
+        if (!firebaseAdminConfig.privateKey) missing.push('FIREBASE_PRIVATE_KEY');
+
+        console.warn(`Firebase Admin credentials incomplete. Missing: ${missing.join(', ')}`);
+        console.warn('Check App Hosting environment variables and secrets configuration.');
     }
 }
 
