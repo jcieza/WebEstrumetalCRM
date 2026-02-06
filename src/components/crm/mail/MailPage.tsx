@@ -1,9 +1,17 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Mail, Search, Clock, User, ArrowRight, ShieldCheck, Inbox, Archive, Trash2, Send } from 'lucide-react';
+import { Mail, Search, Clock, User, ArrowRight, ShieldCheck, Inbox, Archive, Trash2, Send, Paperclip, Download, Loader2 } from 'lucide-react';
 import { db } from '@/lib/firebase';
-import { collection, query, orderBy, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+
+interface Attachment {
+    filename: string;
+    contentType: string;
+    size: number;
+    url: string;
+    storagePath?: string;
+}
 
 interface EmailMessage {
     id: string;
@@ -12,23 +20,40 @@ interface EmailMessage {
     body: string;
     receivedAt: string;
     status: 'NEW' | 'READ' | 'ARCHIVED';
+    attachments?: Attachment[];
 }
 
 const MailPage = () => {
     const [messages, setMessages] = useState<EmailMessage[]>([]);
     const [selectedMessage, setSelectedMessage] = useState<EmailMessage | null>(null);
     const [loading, setLoading] = useState(true);
+    const [replyText, setReplyText] = useState('');
+    const [isSending, setIsSending] = useState(false);
 
     useEffect(() => {
         const q = query(collection(db, 'incoming_messages'), orderBy('receivedAt', 'desc'));
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const msgs = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            } as EmailMessage));
+            const msgs = snapshot.docs.map(doc => {
+                const data = doc.data();
+                return {
+                    id: doc.id,
+                    ...data,
+                    // Aseguramos que attachments sea un array
+                    attachments: data.attachments || []
+                } as EmailMessage;
+            });
+
             setMessages(msgs);
             setLoading(false);
+
+            // ACTUALIZACIÓN REACTIVA: Si el mensaje seleccionado se actualiza en Firestore 
+            // (ej: llegó el adjunto un segundo después), lo actualizamos en pantalla.
+            setSelectedMessage(prev => {
+                if (!prev) return null;
+                const updated = msgs.find(m => m.id === prev.id);
+                return updated || prev;
+            });
         });
 
         return () => unsubscribe();
@@ -39,6 +64,49 @@ const MailPage = () => {
             await updateDoc(doc(db, 'incoming_messages', id), { status: 'READ' });
         } catch (error) {
             console.error('Error marking as read:', error);
+        }
+    };
+
+    const handleDelete = async (msg: EmailMessage) => {
+        if (!confirm('¿Estás seguro de eliminar este mensaje permanentemente?')) return;
+
+        try {
+            await deleteDoc(doc(db, 'incoming_messages', msg.id));
+            if (selectedMessage?.id === msg.id) setSelectedMessage(null);
+            // Nota: En una versión futura podríamos borrar los archivos de Storage aquí también
+        } catch (error) {
+            console.error('Error deleting message:', error);
+        }
+    };
+
+    const handleSendReply = async () => {
+        if (!selectedMessage || !replyText.trim()) return;
+
+        setIsSending(true);
+        try {
+            const response = await fetch('/api/mail/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    to: selectedMessage.from,
+                    subject: `Re: ${selectedMessage.subject}`,
+                    body: replyText,
+                    fromName: 'Estrumetal Ventas'
+                })
+            });
+
+            if (response.ok) {
+                alert('Respuesta enviada con éxito');
+                setReplyText('');
+            } else {
+                const err = await response.json();
+                alert(`Error: ${err.error || 'No se pudo enviar'}`);
+            }
+        } catch (error) {
+            console.error('Error sending reply:', error);
+            alert('Error crítico al enviar');
+        } finally {
+            setIsSending(false);
         }
     };
 
@@ -92,9 +160,12 @@ const MailPage = () => {
                                     className={`w-full text-left p-4 border-b border-slate-50 transition-all hover:bg-slate-50 flex flex-col gap-1 ${selectedMessage?.id === msg.id ? 'bg-green-50/50 border-l-4 border-l-green-600' : ''}`}
                                 >
                                     <div className="flex justify-between items-center">
-                                        <span className={`text-[10px] font-black uppercase tracking-tight ${msg.status === 'NEW' ? 'text-green-700' : 'text-slate-400'}`}>
-                                            {msg.from.split('<')[0] || msg.from}
-                                        </span>
+                                        <div className="flex items-center gap-1">
+                                            <span className={`text-[10px] font-black uppercase tracking-tight ${msg.status === 'NEW' ? 'text-green-700' : 'text-slate-400'}`}>
+                                                {msg.from.split('<')[0] || msg.from}
+                                            </span>
+                                            {msg.attachments && msg.attachments.length > 0 && <Paperclip size={10} className="text-slate-300" />}
+                                        </div>
                                         <span className="text-[9px] text-slate-300 font-mono">
                                             {new Date(msg.receivedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                         </span>
@@ -127,12 +198,46 @@ const MailPage = () => {
                                 </div>
                                 <div className="flex gap-2">
                                     <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-xl transition-all border border-transparent hover:border-slate-100"><Archive size={20} /></button>
-                                    <button className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all border border-transparent hover:border-red-100"><Trash2 size={20} /></button>
+                                    <button
+                                        onClick={() => handleDelete(selectedMessage)}
+                                        className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all border border-transparent hover:border-red-100"
+                                    >
+                                        <Trash2 size={20} />
+                                    </button>
                                 </div>
                             </div>
 
-                            <div className="lex-1 p-8 overflow-y-auto text-slate-600 text-sm leading-relaxed whitespace-pre-wrap font-medium">
-                                {selectedMessage.body}
+                            <div className="flex-1 p-8 overflow-y-auto text-slate-600 text-sm leading-relaxed whitespace-pre-wrap font-medium flex flex-col gap-6">
+                                <div className="min-h-[100px]">
+                                    {selectedMessage.body}
+                                </div>
+
+                                {/* Adjuntos */}
+                                {selectedMessage.attachments && selectedMessage.attachments.length > 0 && (
+                                    <div className="mt-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                        <p className="text-[10px] font-black uppercase text-slate-400 mb-3 flex items-center gap-2">
+                                            <Paperclip size={12} />
+                                            Archivos Adjuntos ({selectedMessage.attachments.length})
+                                        </p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {selectedMessage.attachments.map((att, idx) => (
+                                                <a
+                                                    key={idx}
+                                                    href={att.url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="flex items-center gap-3 px-4 py-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all shadow-sm"
+                                                >
+                                                    <div className="text-[10px] flex flex-col">
+                                                        <span className="font-black text-slate-700 truncate max-w-[150px]">{att.filename}</span>
+                                                        <span className="text-[8px] text-slate-400 uppercase">{(att.size / 1024).toFixed(1)} KB</span>
+                                                    </div>
+                                                    <Download size={14} className="text-green-600" />
+                                                </a>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
 
                                 <div className="mt-12 pt-8 border-t border-slate-50 flex flex-col gap-4">
                                     <div className="flex items-center gap-2 mb-2">
@@ -140,12 +245,18 @@ const MailPage = () => {
                                         <span className="text-[10px] font-black uppercase text-slate-800">Responder como @ciaestrumetal.com</span>
                                     </div>
                                     <textarea
+                                        value={replyText}
+                                        onChange={(e) => setReplyText(e.target.value)}
                                         className="w-full h-32 p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none focus:ring-2 focus:ring-green-500/10 transition-all text-xs font-bold tracking-tight"
                                         placeholder="Escribe tu respuesta aquí..."
                                     ></textarea>
-                                    <button className="self-end px-8 py-3 bg-green-700 text-white rounded-2xl font-black text-[10px] uppercase tracking-[1.5px] shadow-xl shadow-green-100 hover:shadow-2xl transition-all flex items-center gap-2">
-                                        <Send size={16} />
-                                        Enviar Respuesta
+                                    <button
+                                        onClick={handleSendReply}
+                                        disabled={isSending || !replyText.trim()}
+                                        className="self-end px-8 py-3 bg-green-700 text-white rounded-2xl font-black text-[10px] uppercase tracking-[1.5px] shadow-xl shadow-green-100 hover:shadow-2xl transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {isSending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                                        {isSending ? 'Enviando...' : 'Enviar Respuesta'}
                                     </button>
                                 </div>
                             </div>
