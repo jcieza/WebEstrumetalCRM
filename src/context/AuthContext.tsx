@@ -26,6 +26,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 // Whitelist of authorized users (can be email or UID for extra security)
 const AUTHORIZED_USERS = [
     'jciezalujan@gmail.com',
+    'josepuma158@gmail.com',
     's7Mtyvp9mOc6aQUT2XxZcrgajZl1' // Benjamin's Specific UID
 ];
 

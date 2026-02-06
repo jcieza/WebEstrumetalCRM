@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { LogIn, ShieldAlert, KeyRound, Loader2 } from 'lucide-react';
 
 const LoginPage: React.FC = () => {
-    const { login, loginWithEmail, user, authorized, loading } = useAuth();
+    const { login, loginWithEmail, logout, user, authorized, loading } = useAuth();
     const [isLoggingIn, setIsLoggingIn] = useState(false);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -75,12 +75,20 @@ const LoginPage: React.FC = () => {
                             <p className="text-slate-400 text-sm leading-relaxed mb-8 italic">
                                 Tu correo <span className="text-slate-200 font-bold">({user.email})</span> no está en la lista de personal autorizado.
                             </p>
-                            <button
-                                onClick={handleGoogleLogin}
-                                className="w-full py-4 px-6 rounded-2xl bg-white/5 text-white text-[10px] font-black uppercase tracking-[2px] hover:bg-white/10 transition-all border border-white/5"
-                            >
-                                Probar con otra cuenta
-                            </button>
+                            <div className="flex flex-col gap-3">
+                                <button
+                                    onClick={() => logout()}
+                                    className="w-full py-4 px-6 rounded-2xl bg-white text-slate-950 text-[10px] font-black uppercase tracking-[2px] hover:scale-[1.02] active:scale-[0.98] transition-all shadow-2xl"
+                                >
+                                    Cerrar sesión e intentar localmente
+                                </button>
+                                <button
+                                    onClick={handleGoogleLogin}
+                                    className="w-full py-4 px-6 rounded-2xl bg-white/5 text-slate-400 text-[10px] font-black uppercase tracking-[2px] hover:bg-white/10 transition-all border border-white/5"
+                                >
+                                    Probar con otra cuenta Google
+                                </button>
+                            </div>
                         </div>
                     ) : (
                         <div>

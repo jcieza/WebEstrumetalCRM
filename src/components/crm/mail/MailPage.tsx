@@ -22,6 +22,7 @@ interface EmailMessage {
     receivedAt: string;
     status: 'NEW' | 'READ' | 'ARCHIVED' | 'PENDING' | 'DONE';
     attachments?: Attachment[];
+    replied?: boolean;
 }
 
 const MailPage = () => {
@@ -38,6 +39,9 @@ const MailPage = () => {
     const [composeTo, setComposeTo] = useState('');
     const [composeSubject, setComposeSubject] = useState('');
     const [composeBody, setComposeBody] = useState('');
+    const [currentFolder, setCurrentFolder] = useState<'inbox' | 'sent' | 'archived' | 'trash'>('inbox');
+    const [undoTimer, setUndoTimer] = useState<any>(null);
+    const [searchQuery, setSearchQuery] = useState('');
 
     useEffect(() => {
         const q = query(collection(db, 'incoming_messages'), orderBy('receivedAt', 'desc'));
@@ -67,6 +71,17 @@ const MailPage = () => {
 
         return () => unsubscribe();
     }, []);
+
+    // Tab Title Notification
+    useEffect(() => {
+        const newCount = messages.filter(m => m.status === 'NEW').length;
+        if (newCount > 0) {
+            document.title = `(${newCount}) Correos - Estrumetal`;
+        } else {
+            document.title = 'Comunicaciones - Estrumetal';
+        }
+        return () => { document.title = 'Estrumetal App'; };
+    }, [messages]);
 
     const markAsRead = async (id: string) => {
         try {
@@ -105,6 +120,11 @@ const MailPage = () => {
             });
 
             if (response.ok) {
+                // Marcar como respondido en Firestore
+                await updateDoc(doc(db, 'incoming_messages', selectedMessage.id), {
+                    replied: true,
+                    status: 'READ'
+                });
                 alert('Respuesta enviada con éxito');
                 setReplyText('');
             } else {
@@ -119,9 +139,55 @@ const MailPage = () => {
         }
     };
 
-    const filteredMessages = messages.filter(m =>
-        filterAccount === 'all' || m.to === filterAccount
-    );
+    const handleArchive = async (msg: EmailMessage) => {
+        try {
+            await updateDoc(doc(db, 'incoming_messages', msg.id), { status: 'ARCHIVED' });
+            // Log de éxito psicológico
+            console.log(`Mensaje ${msg.id} archivado. Limpieza completada.`);
+            if (selectedMessage?.id === msg.id) {
+                setSelectedMessage(null);
+                setShowMobileDetail(false);
+            }
+        } catch (error) {
+            console.error('Error archiving message:', error);
+        }
+    };
+
+    const handleSendWithUndo = async () => {
+        if (!replyText.trim()) return;
+
+        setIsSending(true);
+        // Simulando delay de 5 segundos para "Undo"
+        const timer = window.setTimeout(async () => {
+            await handleSendReply();
+            setUndoTimer(null);
+        }, 5000);
+
+        setUndoTimer(timer as unknown as number);
+    };
+
+    const cancelSend = () => {
+        if (undoTimer) {
+            clearTimeout(undoTimer);
+            setUndoTimer(null);
+            setIsSending(false);
+            alert('Envío cancelado. El borrador sigue aquí.');
+        }
+    };
+
+    const filteredMessages = messages.filter(m => {
+        const matchesAccount = filterAccount === 'all' || m.to === filterAccount;
+        const matchesSearch = !searchQuery ||
+            m.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            m.from.toLowerCase().includes(searchQuery.toLowerCase());
+
+        if (!matchesAccount || !matchesSearch) return false;
+
+        if (currentFolder === 'archived') return m.status === 'ARCHIVED';
+        if (currentFolder === 'trash') return false; // Por ahora no guardamos trash real
+        if (currentFolder === 'inbox') return m.status !== 'ARCHIVED';
+        return true;
+    });
 
     const accounts = Array.from(new Set(messages.map(m => m.to))).filter(Boolean);
 
@@ -132,6 +198,18 @@ const MailPage = () => {
                 <div>
                     <h1 className="text-xl md:text-3xl font-black text-slate-800 tracking-tight uppercase">Comunicaciones</h1>
                     <p className="text-slate-400 text-[8px] md:text-sm mt-1 font-medium uppercase tracking-widest leading-none">Bandeja @ciaestrumetal.com</p>
+                </div>
+                <div className="flex gap-2 md:gap-4 flex-1 max-w-md mx-4 hidden sm:flex">
+                    <div className="relative w-full">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
+                        <input
+                            type="text"
+                            placeholder="Buscar en Estrumetal Mail..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full bg-white border border-slate-100 rounded-xl py-2 pl-10 pr-4 text-[10px] font-bold uppercase tracking-widest outline-none focus:ring-2 focus:ring-green-500/10 transition-all placeholder:text-slate-200"
+                        />
+                    </div>
                 </div>
                 <div className="flex gap-2 md:gap-4">
                     <button
@@ -150,6 +228,25 @@ const MailPage = () => {
 
             {/* Main Layout */}
             <div className="flex-1 flex gap-6 overflow-hidden min-h-0">
+                {/* Internal Mail Sidebar */}
+                <div className="hidden lg:flex flex-col w-48 gap-2">
+                    {[
+                        { id: 'inbox', label: 'Bandeja', icon: Inbox, color: 'text-green-600' },
+                        { id: 'sent', label: 'Enviados', icon: Send, color: 'text-blue-500' },
+                        { id: 'archived', label: 'Archivados', icon: Archive, color: 'text-slate-500' },
+                        { id: 'trash', label: 'Papelera', icon: Trash2, color: 'text-red-400' },
+                    ].map(folder => (
+                        <button
+                            key={folder.id}
+                            onClick={() => setCurrentFolder(folder.id as any)}
+                            className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all font-black text-[10px] uppercase tracking-wider ${currentFolder === folder.id ? 'bg-white shadow-sm border border-slate-100' : 'hover:bg-white/50 text-slate-400'}`}
+                        >
+                            <folder.icon size={16} className={currentFolder === folder.id ? folder.color : 'text-slate-300'} />
+                            <span className={currentFolder === folder.id ? 'text-slate-800' : ''}>{folder.label}</span>
+                        </button>
+                    ))}
+                </div>
+
                 {/* Inbox List */}
                 <div className={`transition-all duration-500 bg-white border border-slate-100 rounded-2xl shadow-sm flex flex-col overflow-hidden ${showMobileDetail ? 'hidden md:flex' : 'flex'} ${selectedMessage ? 'md:w-20 lg:w-80' : 'md:w-1/3'}`}>
                     <div className={`p-4 border-b border-slate-50 flex flex-col gap-3 bg-slate-50/50 transition-all ${selectedMessage ? 'md:p-2' : ''}`}>
@@ -205,6 +302,11 @@ const MailPage = () => {
                                                     {msg.to.split('@')[0]}
                                                 </span>
                                             )}
+                                            {msg.replied && (
+                                                <div className="bg-green-100 text-green-600 p-0.5 rounded">
+                                                    <ArrowRight size={10} className="-rotate-45" />
+                                                </div>
+                                            )}
                                             <span className={`text-[10px] font-black uppercase tracking-tight truncate ${msg.status === 'NEW' ? 'text-green-700' : 'text-slate-400'} ${selectedMessage ? 'md:hidden lg:inline-block' : ''}`}>
                                                 {msg.from.split('<')[0] || msg.from}
                                             </span>
@@ -221,6 +323,15 @@ const MailPage = () => {
                                     <h4 className={`text-xs truncate font-bold w-full ${msg.status === 'NEW' ? 'text-slate-800' : 'text-slate-500'} ${selectedMessage ? 'md:hidden lg:inline' : ''}`}>
                                         {msg.subject || '(Sin Asunto)'}
                                     </h4>
+
+                                    {/* Bumping / Recordatorio */}
+                                    {msg.status === 'NEW' && (Date.now() - new Date(msg.receivedAt).getTime()) > 3 * 24 * 60 * 60 * 1000 && !selectedMessage && (
+                                        <div className="mt-1 flex items-center gap-1">
+                                            <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
+                                            <span className="text-[7px] font-black text-red-500 uppercase">¿Hacer Seguimiento?</span>
+                                        </div>
+                                    )}
+
                                     <div className={`flex items-center gap-2 ${selectedMessage ? 'md:hidden lg:flex' : 'flex'}`}>
                                         <p className="text-[10px] text-slate-400 line-clamp-1 italic flex-1">
                                             {msg.body.substring(0, 60)}...
@@ -258,7 +369,12 @@ const MailPage = () => {
                                     </div>
                                 </div>
                                 <div className="flex gap-2">
-                                    <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-xl transition-all border border-transparent hover:border-slate-100"><Archive size={20} /></button>
+                                    <button
+                                        onClick={() => handleArchive(selectedMessage)}
+                                        className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-xl transition-all border border-transparent hover:border-green-100"
+                                    >
+                                        <Archive size={20} />
+                                    </button>
                                     <button
                                         onClick={() => handleDelete(selectedMessage)}
                                         className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all border border-transparent hover:border-red-100"
@@ -325,6 +441,16 @@ const MailPage = () => {
                                                     <span className="text-[10px] md:text-xs font-black uppercase text-slate-700 tracking-tight truncate max-w-[120px] md:max-w-none">Visor Estrumetal</span>
                                                 </div>
                                                 <div className="flex items-center gap-2">
+                                                    <button
+                                                        onClick={() => {
+                                                            alert('Tarea enviada a G-Tasks (Simulado)');
+                                                            setPreviewingPdf(null);
+                                                        }}
+                                                        className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-blue-500 transition-all mr-4 shadow-lg shadow-blue-200"
+                                                    >
+                                                        <Clock size={14} />
+                                                        Crear Tarea
+                                                    </button>
                                                     <a href={previewingPdf} download className="p-2 text-slate-400 hover:text-green-600 transition-all"><Download size={20} /></a>
                                                     <button
                                                         onClick={() => setPreviewingPdf(null)}
@@ -367,13 +493,21 @@ const MailPage = () => {
                                         placeholder="Escribe tu respuesta aquí..."
                                     ></textarea>
                                     <button
-                                        onClick={handleSendReply}
+                                        onClick={handleSendWithUndo}
                                         disabled={isSending || !replyText.trim()}
                                         className="self-end px-6 md:px-8 py-3 bg-green-700 text-white rounded-2xl font-black text-[9px] md:text-[10px] uppercase tracking-[1.5px] shadow-xl shadow-green-100 hover:shadow-2xl transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         {isSending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                                        {isSending ? 'Enviando...' : 'Enviar Respuesta'}
+                                        {undoTimer ? 'Deshacer (5s)...' : isSending ? 'Enviando...' : 'Enviar Respuesta'}
                                     </button>
+                                    {undoTimer && (
+                                        <button
+                                            onClick={cancelSend}
+                                            className="self-end text-[9px] font-black text-red-500 uppercase tracking-widest mt-2 underline"
+                                        >
+                                            Cancelar Envío
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         </>
@@ -414,6 +548,28 @@ const MailPage = () => {
                         </div>
 
                         <div className="p-4 md:p-6 flex flex-col gap-4 overflow-y-auto flex-1">
+                            {/* Templates Toolbar */}
+                            <div className="flex gap-2 pb-2 overflow-x-auto no-scrollbar">
+                                <button
+                                    onClick={() => {
+                                        setComposeSubject('PRESENTACIÓN ESTRUMETAL - SOLUCIONES METALMECÁNICAS');
+                                        setComposeBody('Estimado cliente,\n\nEs un gusto saludarle. Adjunto enviamos nuestra presentación corporativa resaltando la capacidad de nuestra planta para sus proyectos...\n\nAtentamente,\nEquipo Estrumetal');
+                                    }}
+                                    className="shrink-0 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-[8px] font-black uppercase tracking-tight transition-all border border-slate-200"
+                                >
+                                    ✨ Presentación
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setComposeSubject('COTIZACIÓN ESTRUMETAL - REF: ');
+                                        setComposeBody('Saludos cordiales,\n\nEn respuesta a su solicitud, adjunto encontrará la cotización formal para los servicios industriales requeridos.\n\nQuedamos atentos a sus comentarios.\n\nAtentamente,\nDepartamento de Ventas');
+                                    }}
+                                    className="shrink-0 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-[8px] font-black uppercase tracking-tight transition-all border border-slate-200"
+                                >
+                                    📄 Cotización Base
+                                </button>
+                            </div>
+
                             <div className="flex flex-col gap-1.5">
                                 <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Desde</label>
                                 <select
@@ -468,41 +624,49 @@ const MailPage = () => {
                             </button>
                             <button
                                 onClick={async () => {
+                                    if (undoTimer) {
+                                        cancelSend();
+                                        return;
+                                    }
                                     if (!composeTo || !composeSubject || !composeBody) {
                                         alert('Completa los campos');
                                         return;
                                     }
                                     setIsSending(true);
-                                    try {
-                                        const response = await fetch('/api/mail/send', {
-                                            method: 'POST',
-                                            headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({
-                                                to: composeTo,
-                                                subject: composeSubject,
-                                                body: composeBody,
-                                                fromName: senderAccount.split('@')[0].toUpperCase(),
-                                                fromEmail: senderAccount
-                                            })
-                                        });
-                                        if (response.ok) {
-                                            alert('Enviado');
-                                            setShowCompose(false);
-                                            setComposeTo('');
-                                            setComposeSubject('');
-                                            setComposeBody('');
-                                        } else {
-                                            alert('Error');
-                                        }
-                                    } catch (e) { alert('Error'); }
-                                    finally { setIsSending(false); }
+
+                                    const timer = window.setTimeout(async () => {
+                                        try {
+                                            const response = await fetch('/api/mail/send', {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({
+                                                    to: composeTo,
+                                                    subject: composeSubject,
+                                                    body: composeBody,
+                                                    fromName: senderAccount.split('@')[0].toUpperCase(),
+                                                    fromEmail: senderAccount
+                                                })
+                                            });
+                                            if (response.ok) {
+                                                alert('Enviado');
+                                                setShowCompose(false);
+                                                setComposeTo('');
+                                                setComposeSubject('');
+                                                setComposeBody('');
+                                            } else {
+                                                alert('Error');
+                                            }
+                                        } catch (e) { alert('Error'); }
+                                        finally { setIsSending(false); setUndoTimer(null); }
+                                    }, 5000);
+
+                                    setUndoTimer(timer);
                                 }}
-                                disabled={isSending}
-                                className="bg-green-700 hover:bg-green-600 text-white px-6 md:px-8 py-3 rounded-xl md:rounded-2xl flex items-center gap-2 shadow-xl shadow-green-900/10 transition-all font-black text-[10px] uppercase tracking-widest disabled:opacity-50"
+                                className={`px-6 md:px-8 py-3 rounded-xl md:rounded-2xl flex items-center gap-2 shadow-xl transition-all font-black text-[10px] uppercase tracking-widest ${undoTimer ? 'bg-red-500 text-white' : 'bg-green-700 hover:bg-green-600 text-white shadow-green-900/10'}`}
                             >
-                                {isSending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                                <span className="hidden md:inline">Enviar Correo</span>
-                                <span className="md:hidden">Enviar</span>
+                                {isSending && !undoTimer ? <Loader2 size={16} className="animate-spin" /> : undoTimer ? <X size={16} /> : <Send size={16} />}
+                                <span className="hidden md:inline">{undoTimer ? 'DESHACER ENVÍO (5s)' : isSending ? 'Enviando...' : 'Enviar Correo'}</span>
+                                <span className="md:hidden">{undoTimer ? 'ANULAR' : 'Enviar'}</span>
                             </button>
                         </div>
                     </div>
