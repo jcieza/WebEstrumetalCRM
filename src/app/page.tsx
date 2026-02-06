@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Layout from '@/components/layout/Layout';
 import Dashboard from '@/components/crm/Dashboard';
 import ProductionPage from '@/components/crm/production/ProductionPage';
@@ -25,6 +25,12 @@ import MailPage from '@/components/crm/mail/MailPage';
 export default function CRMPage() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.hostname.startsWith('mail.')) {
+      setActiveTab('emails');
+    }
+  }, []);
 
   const handleNavigate = (tab: string, clientId: string | null = null) => {
     setActiveTab(tab);

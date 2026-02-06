@@ -19,6 +19,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
     const [isTabletMode, setIsTabletMode] = useState(false);
     const [isPhoneMode, setIsPhoneMode] = useState(false);
     const [isMenuHidden, setIsMenuHidden] = useState(true);
+    const [isMailSubdomain, setIsMailSubdomain] = useState(false);
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            setIsMailSubdomain(window.location.hostname.startsWith('mail.'));
+        }
+    }, []);
 
     useEffect(() => {
         // Handle localStorage on client side
@@ -38,8 +45,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
     }, []);
 
     const isMobileLayout = isTabletMode || isPhoneMode;
-    const isCollapsed = activeTab === 'emails' || activeTab === 'messages'; // Ensure both synonyms/variants collapse
-    const showSidebar = !isMobileLayout;
+    const isCollapsed = activeTab === 'emails' || activeTab === 'messages';
+    const showSidebar = !isMobileLayout && !isMailSubdomain;
+    const showFurniture = !isMailSubdomain;
 
     // Widths
     const sidebarWidth = isCollapsed ? 80 : 260;
@@ -78,9 +86,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
                 className="flex-1 transition-all duration-300 min-h-screen relative overflow-x-hidden"
                 style={{
                     marginLeft: showSidebar ? sidebarWidth : 0,
-                    padding: isPhoneMode ? '6px' : '25px',
-                    paddingBottom: isMobileLayout ? 140 : 25,
-                    backgroundColor: 'var(--bg-main)'
+                    padding: isMailSubdomain ? '0px' : (isPhoneMode ? '6px' : '25px'),
+                    paddingBottom: isMailSubdomain ? '0px' : (isMobileLayout ? 140 : 25),
+                    backgroundColor: isMailSubdomain ? '#FFFFFF' : 'var(--bg-main)'
                 }}
             >
                 <div>
@@ -90,7 +98,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
 
             {/* Bottom Navigation for Mobile */}
             <AnimatePresence>
-                {isMobileLayout && (
+                {isMobileLayout && showFurniture && (
                     <motion.div
                         initial={{ y: 100 }}
                         animate={{ y: 0 }}
