@@ -5,7 +5,7 @@ export async function POST(request: Request) {
     // Inicializar Resend dentro del handler para evitar errores en build si la key no existe
     const resend = new Resend(process.env.RESEND_API_KEY);
     try {
-        const { to, subject, body, fromName } = await request.json();
+        const { to, subject, body, fromName, fromEmail } = await request.json();
 
         if (!to || !subject || !body) {
             return NextResponse.json(
@@ -14,17 +14,26 @@ export async function POST(request: Request) {
             );
         }
 
+        // Limpiar y procesar destinatarios (soporta comas)
+        const recipients = typeof to === 'string'
+            ? to.split(/[;,]/).map(e => e.trim()).filter(Boolean)
+            : Array.isArray(to) ? to : [to];
+
         // Configuración del remitente profesional
-        const fromAddress = "ventas@ciaestrumetal.com";
+        const allowedFroms = ["ventas@ciaestrumetal.com", "administracion@ciaestrumetal.com"];
+        let fromAddress = "ventas@ciaestrumetal.com"; // Por defecto
+
+        if (fromEmail && allowedFroms.includes(fromEmail)) {
+            fromAddress = fromEmail;
+        }
+
         const displayName = fromName || "Estrumetal CRM";
 
         const { data, error } = await resend.emails.send({
             from: `${displayName} <${fromAddress}>`,
-            to: [to],
+            to: recipients,
             subject: subject,
             text: body,
-            // Si el body contiene HTML, podemos usar la propiedad 'html'
-            // html: body 
         });
 
         if (error) {

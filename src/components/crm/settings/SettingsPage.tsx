@@ -1,10 +1,12 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Settings as SettingsIcon, Bell, Palette, Shield,
-    MessageSquare, Server, Database, Save, Zap, Check, Smartphone, Lock, Trash2, Edit2, Plus, DownloadCloud, RefreshCw, X, Clock
+    MessageSquare, Server, Database, Save, Zap, Check, Smartphone, Lock, Trash2, Edit2, Plus, DownloadCloud, RefreshCw, X, Clock, User
 } from 'lucide-react';
+import { auth } from '@/lib/firebase';
+import { updateProfile, updatePassword } from 'firebase/auth';
 
 const ToggleSwitch = ({ enabled, onToggle }: { enabled: boolean, onToggle: () => void }) => (
     <button
@@ -24,8 +26,62 @@ const SettingsPage = () => {
         notifications: true,
     });
 
+    const [profile, setProfile] = useState({
+        displayName: '',
+        email: '',
+    });
+
+    useEffect(() => {
+        if (auth.currentUser) {
+            setProfile({
+                displayName: auth.currentUser.displayName || '',
+                email: auth.currentUser.email || '',
+            });
+        }
+    }, [auth.currentUser]);
+
+    const [passwords, setPasswords] = useState({
+        new: '',
+        confirm: ''
+    });
+
+    const [saving, setSaving] = useState(false);
+    const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+
+    const handleUpdateProfile = async () => {
+        if (!auth.currentUser) return;
+        setSaving(true);
+        try {
+            await updateProfile(auth.currentUser, { displayName: profile.displayName });
+            setMessage({ type: 'success', text: 'Perfil actualizado correctamente' });
+        } catch (e: any) {
+            setMessage({ type: 'error', text: e.message });
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleUpdatePassword = async () => {
+        if (!auth.currentUser) return;
+        if (passwords.new !== passwords.confirm) {
+            setMessage({ type: 'error', text: 'Las contraseñas no coinciden' });
+            return;
+        }
+        setSaving(true);
+        try {
+            await updatePassword(auth.currentUser, passwords.new);
+            setMessage({ type: 'success', text: 'Contraseña actualizada' });
+            setPasswords({ new: '', confirm: '' });
+        } catch (e: any) {
+            setMessage({ type: 'error', text: 'Error: ' + e.message });
+        } finally {
+            setSaving(false);
+        }
+    };
+
     const sections = [
         { id: 'general', label: 'General', icon: SettingsIcon },
+        { id: 'profile', label: 'Perfil', icon: User },
         { id: 'appearance', label: 'Apariencia', icon: Palette },
         { id: 'integrations', label: 'Integraciones', icon: Server },
         { id: 'database', label: 'Base de Datos', icon: Database },
@@ -113,6 +169,40 @@ const SettingsPage = () => {
                         </div>
                     )}
 
+                    {activeSection === 'profile' && (
+                        <div className="flex flex-col gap-4">
+                            {renderHeader('Perfil de Usuario', User)}
+                            <div className="bg-white border border-gray-100 rounded-lg p-6 shadow-sm flex flex-col gap-6">
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-[10px] font-black uppercase text-gray-400">Nombre Completo</label>
+                                    <input
+                                        type="text"
+                                        value={profile.displayName}
+                                        onChange={(e) => setProfile({ ...profile, displayName: e.target.value })}
+                                        className="bg-gray-50 border border-gray-100 rounded-lg p-3 text-xs font-bold outline-none focus:ring-2 focus:ring-green-500/10 transition-all"
+                                        placeholder="Tu Nombre"
+                                    />
+                                </div>
+                                <div className="flex flex-col gap-2 opacity-50">
+                                    <label className="text-[10px] font-black uppercase text-gray-400">Correo Institucional (Solo Lectura)</label>
+                                    <input
+                                        type="email"
+                                        value={profile.email}
+                                        readOnly
+                                        className="bg-gray-100 border border-gray-100 rounded-lg p-3 text-xs font-bold outline-none cursor-not-allowed"
+                                    />
+                                </div>
+                                <button
+                                    onClick={handleUpdateProfile}
+                                    disabled={saving}
+                                    className="self-start px-8 py-3 bg-green-800 text-white rounded-lg text-[10px] font-black uppercase tracking-widest shadow-md hover:bg-green-900 disabled:opacity-50 transition-all"
+                                >
+                                    {saving ? 'Guardando...' : 'Guardar Cambios'}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
                     {activeSection === 'appearance' && (
                         <div className="flex flex-col gap-4">
                             {renderHeader('Apariencia y UI', Palette)}
@@ -162,13 +252,44 @@ const SettingsPage = () => {
                     {activeSection === 'security' && (
                         <div className="flex flex-col gap-4">
                             {renderHeader('Seguridad de Planta', Shield)}
-                            <div className="bg-white border border-gray-100 rounded-lg p-5 shadow-sm space-y-4">
+
+                            <div className="bg-white border border-gray-100 rounded-lg p-6 shadow-sm flex flex-col gap-6">
+                                <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400">Actualizar Contraseña</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="flex flex-col gap-2">
+                                        <label className="text-[10px] font-black uppercase text-gray-400">Nueva Contraseña</label>
+                                        <input
+                                            type="password"
+                                            value={passwords.new}
+                                            onChange={(e) => setPasswords({ ...passwords, new: e.target.value })}
+                                            className="bg-gray-50 border border-gray-100 rounded-lg p-3 text-xs font-bold outline-none focus:ring-2 focus:ring-green-500/10 transition-all"
+                                        />
+                                    </div>
+                                    <div className="flex flex-col gap-2">
+                                        <label className="text-[10px] font-black uppercase text-gray-400">Confirmar Contraseña</label>
+                                        <input
+                                            type="password"
+                                            value={passwords.confirm}
+                                            onChange={(e) => setPasswords({ ...passwords, confirm: e.target.value })}
+                                            className="bg-gray-50 border border-gray-100 rounded-lg p-3 text-xs font-bold outline-none focus:ring-2 focus:ring-green-500/10 transition-all"
+                                        />
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={handleUpdatePassword}
+                                    disabled={saving || !passwords.new}
+                                    className="self-start px-8 py-3 bg-green-800 text-white rounded-lg text-[10px] font-black uppercase tracking-widest shadow-md hover:bg-green-900 disabled:opacity-50 transition-all"
+                                >
+                                    {saving ? 'Procesando...' : 'Cambiar Contraseña'}
+                                </button>
+                            </div>
+
+                            <div className="bg-white border border-gray-100 rounded-lg p-5 shadow-sm space-y-4 opacity-50">
                                 {[
-                                    { label: 'Cambiar Clave de Acceso', icon: Lock },
                                     { label: 'Autenticación en Dos Pasos', icon: Smartphone },
                                     { label: 'Auditoría de Sesiones', icon: Clock }
                                 ].map((item, i) => (
-                                    <div key={i} className="flex items-center justify-between p-3 border border-gray-50 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
+                                    <div key={i} className="flex items-center justify-between p-3 border border-gray-50 rounded-lg">
                                         <div className="flex items-center gap-3">
                                             <item.icon size={16} className="text-gray-400" />
                                             <span className="text-[11px] font-bold text-gray-700 uppercase tracking-tight">{item.label}</span>
@@ -177,6 +298,14 @@ const SettingsPage = () => {
                                     </div>
                                 ))}
                             </div>
+                        </div>
+                    )}
+
+                    {message && (
+                        <div className={`fixed bottom-10 left-1/2 -translate-x-1/2 px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-4 animate-in slide-in-from-bottom duration-300 ${message.type === 'success' ? 'bg-green-800 text-white' : 'bg-red-600 text-white'}`}>
+                            {message.type === 'success' ? <Check size={20} /> : <X size={20} />}
+                            <span className="text-xs font-black uppercase tracking-widest">{message.text}</span>
+                            <button onClick={() => setMessage(null)} className="ml-4 opacity-50 hover:opacity-100"><X size={16} /></button>
                         </div>
                     )}
                 </div>

@@ -2,13 +2,14 @@
 
 import React, { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { LogIn, ShieldAlert, KeyRound, Loader2 } from 'lucide-react';
+import { LogIn, ShieldAlert, KeyRound, Loader2, Eye, EyeOff } from 'lucide-react';
 
 const LoginPage: React.FC = () => {
     const { login, loginWithEmail, logout, user, authorized, loading } = useAuth();
     const [isLoggingIn, setIsLoggingIn] = useState(false);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
 
     const handleGoogleLogin = async () => {
@@ -111,13 +112,20 @@ const LoginPage: React.FC = () => {
                                     </div>
                                     <div className="relative group">
                                         <input
-                                            type="password"
+                                            type={showPassword ? "text" : "password"}
                                             placeholder="CONTRASEÑA"
                                             value={password}
                                             onChange={(e) => setPassword(e.target.value)}
-                                            className="w-full bg-white/5 border border-white/5 rounded-2xl py-4 px-6 text-white text-[10px] font-bold uppercase tracking-widest outline-none focus:border-green-500/50 focus:bg-white/10 transition-all"
+                                            className="w-full bg-white/5 border border-white/5 rounded-2xl py-4 px-6 pr-14 text-white text-[10px] font-bold uppercase tracking-widest outline-none focus:border-green-500/50 focus:bg-white/10 transition-all"
                                             required
                                         />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPassword(!showPassword)}
+                                            className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors"
+                                        >
+                                            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                        </button>
                                     </div>
                                 </div>
 

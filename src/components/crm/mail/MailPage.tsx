@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Mail, Search, Clock, User, ArrowRight, ShieldCheck, Inbox, Archive, Trash2, Send, Paperclip, Download, Loader2, Eye, X } from 'lucide-react';
 import { db } from '@/lib/firebase';
-import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, addDoc } from 'firebase/firestore';
 
 interface Attachment {
     filename: string;
@@ -20,10 +20,20 @@ interface EmailMessage {
     subject: string;
     body: string;
     receivedAt: string;
-    status: 'NEW' | 'READ' | 'ARCHIVED' | 'PENDING' | 'DONE';
+    status: 'NEW' | 'READ' | 'ARCHIVED' | 'PENDING' | 'DONE' | 'SENT' | 'DRAFT';
     attachments?: Attachment[];
     replied?: boolean;
+    folder?: 'inbox' | 'sent' | 'drafts' | 'trash'; // Opcional, para redundancia
 }
+
+const AUTHORIZED_SENDERS = [
+    'ventas@ciaestrumetal.com',
+    'administracion@ciaestrumetal.com'
+];
+
+// Sonidos Base64 (Pequeños beeps para feedback inmediato)
+const SEND_SOUND = "data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YTv9AIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACA"; // Placeholder breve
+const RECEIVE_SOUND = "data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YTv9AIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACA"; // Placeholder breve
 
 const MailPage = () => {
     const [messages, setMessages] = useState<EmailMessage[]>([]);
@@ -39,9 +49,27 @@ const MailPage = () => {
     const [composeTo, setComposeTo] = useState('');
     const [composeSubject, setComposeSubject] = useState('');
     const [composeBody, setComposeBody] = useState('');
-    const [currentFolder, setCurrentFolder] = useState<'inbox' | 'sent' | 'archived' | 'trash'>('inbox');
+    const [currentFolder, setCurrentFolder] = useState<'inbox' | 'sent' | 'archived' | 'trash' | 'drafts'>('inbox');
     const [undoTimer, setUndoTimer] = useState<any>(null);
+    const [undoCountdown, setUndoCountdown] = useState(5);
     const [searchQuery, setSearchQuery] = useState('');
+    const [toasts, setToasts] = useState<{ id: number; type: 'success' | 'new'; message: string }[]>([]);
+    const [showRecipientsSuggest, setShowRecipientsSuggest] = useState(false);
+    const [isMaximized, setIsMaximized] = useState(false);
+
+    const addToast = (type: 'success' | 'new', message: string) => {
+        const id = Date.now();
+        setToasts(prev => [...prev, { id, type, message }]);
+        setTimeout(() => {
+            setToasts(prev => prev.filter(t => t.id !== id));
+        }, 4000);
+    };
+
+    const playSound = (type: 'send' | 'receive') => {
+        const audio = new Audio(type === 'send' ? SEND_SOUND : RECEIVE_SOUND);
+        audio.volume = 0.3;
+        audio.play().catch(() => { /* Ignore browser restrictions */ });
+    };
 
     useEffect(() => {
         const q = query(collection(db, 'incoming_messages'), orderBy('receivedAt', 'desc'));
@@ -60,8 +88,22 @@ const MailPage = () => {
             setMessages(msgs);
             setLoading(false);
 
-            // ACTUALIZACIÓN REACTIVA: Si el mensaje seleccionado se actualiza en Firestore 
-            // (ej: llegó el adjunto un segundo después), lo actualizamos en pantalla.
+            // Auto-seleccionar primer mensaje en PC si no hay ninguno seleccionado
+            if (window.innerWidth >= 768 && msgs.length > 0 && !selectedMessage) {
+                setSelectedMessage(msgs[0]);
+            }
+
+            // Sonido si hay un mensaje nuevo (comparando con el estado anterior)
+            setMessages(prev => {
+                const prevNewIds = new Set(prev.filter(m => m.status === 'NEW').map(m => m.id));
+                const hasNew = msgs.some(m => m.status === 'NEW' && !prevNewIds.has(m.id));
+                if (hasNew && prev.length > 0) {
+                    playSound('receive');
+                    addToast('new', 'Nuevo mensaje recibido');
+                }
+                return msgs;
+            });
+
             setSelectedMessage(prev => {
                 if (!prev) return null;
                 const updated = msgs.find(m => m.id === prev.id);
@@ -71,6 +113,26 @@ const MailPage = () => {
 
         return () => unsubscribe();
     }, []);
+
+    // Timer para el Deshacer Envío
+    useEffect(() => {
+        let interval: any;
+        if (undoTimer) {
+            setUndoCountdown(5);
+            interval = setInterval(() => {
+                setUndoCountdown(prev => {
+                    if (prev <= 1) {
+                        clearInterval(interval);
+                        return 0;
+                    }
+                    return prev - 1;
+                });
+            }, 1000);
+        } else {
+            setUndoCountdown(5);
+        }
+        return () => clearInterval(interval);
+    }, [undoTimer]);
 
     // Tab Title Notification
     useEffect(() => {
@@ -103,6 +165,33 @@ const MailPage = () => {
         }
     };
 
+    const getRecentContacts = () => {
+        const contacts = new Set<string>();
+        messages.forEach(m => {
+            if (m.from) contacts.add(m.from.includes('<') ? m.from.split('<')[1].split('>')[0] : m.from);
+            if (m.to) contacts.add(m.to);
+        });
+        return Array.from(contacts).filter(c => c && c.includes('@'));
+    };
+
+    const saveMessageToFirestore = async (msgData: Partial<EmailMessage>) => {
+        try {
+            await addDoc(collection(db, 'incoming_messages'), {
+                ...msgData,
+                receivedAt: new Date().toISOString(),
+            });
+        } catch (e) {
+            console.error("Error saving message:", e);
+        }
+    };
+
+    const markAsUnread = async (id: string) => {
+        try {
+            await updateDoc(doc(db, 'incoming_messages', id), { status: 'NEW' });
+            addToast('success', 'Marcado como no leído');
+        } catch (error) { console.error(error); }
+    };
+
     const handleSendReply = async () => {
         if (!selectedMessage || !replyText.trim()) return;
 
@@ -115,17 +204,30 @@ const MailPage = () => {
                     to: selectedMessage.from,
                     subject: `Re: ${selectedMessage.subject}`,
                     body: replyText,
-                    fromName: 'Estrumetal Ventas'
+                    fromName: senderAccount.split('@')[0].toUpperCase(),
+                    fromEmail: senderAccount
                 })
             });
 
             if (response.ok) {
-                // Marcar como respondido en Firestore
+                // Marcar como respondido y crear registro en "Enviados"
                 await updateDoc(doc(db, 'incoming_messages', selectedMessage.id), {
                     replied: true,
                     status: 'READ'
                 });
-                alert('Respuesta enviada con éxito');
+
+                // Guardar en la misma colección con status SENT para que aparezca en la carpeta "Enviados"
+                await addDoc(collection(db, 'incoming_messages'), {
+                    from: senderAccount,
+                    to: selectedMessage.from,
+                    subject: `Re: ${selectedMessage.subject}`,
+                    body: replyText,
+                    receivedAt: new Date().toISOString(),
+                    status: 'SENT'
+                });
+
+                playSound('send');
+                addToast('success', 'Mensaje enviado correctamente');
                 setReplyText('');
             } else {
                 const err = await response.json();
@@ -184,8 +286,10 @@ const MailPage = () => {
         if (!matchesAccount || !matchesSearch) return false;
 
         if (currentFolder === 'archived') return m.status === 'ARCHIVED';
-        if (currentFolder === 'trash') return false; // Por ahora no guardamos trash real
-        if (currentFolder === 'inbox') return m.status !== 'ARCHIVED';
+        if (currentFolder === 'trash') return false;
+        if (currentFolder === 'sent') return m.status === 'SENT';
+        if (currentFolder === 'drafts') return m.status === 'DRAFT';
+        if (currentFolder === 'inbox') return m.status !== 'ARCHIVED' && m.status !== 'SENT' && m.status !== 'DRAFT';
         return true;
     });
 
@@ -213,7 +317,12 @@ const MailPage = () => {
                 </div>
                 <div className="flex gap-2 md:gap-4">
                     <button
-                        onClick={() => setShowCompose(true)}
+                        onClick={() => {
+                            setComposeTo('');
+                            setComposeSubject('');
+                            setComposeBody('');
+                            setShowCompose(true);
+                        }}
                         className="bg-green-700 hover:bg-green-600 text-white p-2 md:px-6 md:py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-green-900/20 transition-all font-black text-[10px] uppercase tracking-wider"
                     >
                         <X size={20} className="rotate-45" />
@@ -233,6 +342,7 @@ const MailPage = () => {
                     {[
                         { id: 'inbox', label: 'Bandeja', icon: Inbox, color: 'text-green-600' },
                         { id: 'sent', label: 'Enviados', icon: Send, color: 'text-blue-500' },
+                        { id: 'drafts', label: 'Borradores', icon: Clock, color: 'text-orange-500' },
                         { id: 'archived', label: 'Archivados', icon: Archive, color: 'text-slate-500' },
                         { id: 'trash', label: 'Papelera', icon: Trash2, color: 'text-red-400' },
                     ].map(folder => (
@@ -243,6 +353,11 @@ const MailPage = () => {
                         >
                             <folder.icon size={16} className={currentFolder === folder.id ? folder.color : 'text-slate-300'} />
                             <span className={currentFolder === folder.id ? 'text-slate-800' : ''}>{folder.label}</span>
+                            {folder.id === 'inbox' && messages.filter(m => m.status === 'NEW').length > 0 && (
+                                <span className="ml-auto bg-green-500 text-white text-[8px] px-1.5 py-0.5 rounded-full">
+                                    {messages.filter(m => m.status === 'NEW').length}
+                                </span>
+                            )}
                         </button>
                     ))}
                 </div>
@@ -370,6 +485,20 @@ const MailPage = () => {
                                 </div>
                                 <div className="flex gap-2">
                                     <button
+                                        onClick={() => markAsUnread(selectedMessage.id)}
+                                        className="p-2 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition-all border border-transparent"
+                                        title="Marcar como no leído"
+                                    >
+                                        <Mail size={20} />
+                                    </button>
+                                    <button
+                                        onClick={() => setIsMaximized(true)}
+                                        className="hidden md:flex p-2 text-slate-400 hover:text-green-600 hover:bg-slate-50 rounded-xl transition-all border border-transparent"
+                                        title="Ver en pantalla completa"
+                                    >
+                                        <Eye size={20} />
+                                    </button>
+                                    <button
                                         onClick={() => handleArchive(selectedMessage)}
                                         className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-xl transition-all border border-transparent hover:border-green-100"
                                     >
@@ -380,6 +509,12 @@ const MailPage = () => {
                                         className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all border border-transparent hover:border-red-100"
                                     >
                                         <Trash2 size={20} />
+                                    </button>
+                                    <button
+                                        onClick={() => setSelectedMessage(null)}
+                                        className="hidden md:flex p-2 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-all ml-2"
+                                    >
+                                        <X size={20} />
                                     </button>
                                 </div>
                             </div>
@@ -582,15 +717,40 @@ const MailPage = () => {
                                 </select>
                             </div>
 
-                            <div className="flex flex-col gap-1.5">
+                            <div className="flex flex-col gap-1.5 relative">
                                 <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Para</label>
-                                <input
-                                    type="email"
-                                    placeholder="ejemplo@cliente.com"
-                                    value={composeTo}
-                                    onChange={(e) => setComposeTo(e.target.value)}
-                                    className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-green-500/10 transition-all placeholder:text-slate-300"
-                                />
+                                <div className="relative">
+                                    <input
+                                        type="email"
+                                        placeholder="ejemplo@cliente.com"
+                                        value={composeTo}
+                                        onChange={(e) => {
+                                            setComposeTo(e.target.value);
+                                            setShowRecipientsSuggest(true);
+                                        }}
+                                        onFocus={() => setShowRecipientsSuggest(true)}
+                                        className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-green-500/10 transition-all placeholder:text-slate-300"
+                                    />
+                                    {showRecipientsSuggest && composeTo.length > 0 && (
+                                        <div className="absolute top-full left-0 right-0 z-[2200] bg-white border border-slate-100 rounded-xl mt-1 shadow-2xl max-h-40 overflow-y-auto overflow-x-hidden">
+                                            {getRecentContacts()
+                                                .filter(c => c.toLowerCase().includes(composeTo.toLowerCase()))
+                                                .map(contact => (
+                                                    <button
+                                                        key={contact}
+                                                        onClick={() => {
+                                                            setComposeTo(contact);
+                                                            setShowRecipientsSuggest(false);
+                                                        }}
+                                                        className="w-full text-left px-4 py-2 text-[10px] font-bold text-slate-600 hover:bg-green-50 hover:text-green-700 transition-colors border-b border-slate-50 last:border-none"
+                                                    >
+                                                        {contact}
+                                                    </button>
+                                                ))
+                                            }
+                                        </div>
+                                    )}
+                                </div>
                             </div>
 
                             <div className="flex flex-col gap-1.5">
@@ -615,63 +775,157 @@ const MailPage = () => {
                             </div>
                         </div>
 
-                        <div className="p-4 md:p-6 border-t border-slate-50 bg-slate-50/30 flex justify-end gap-3 shrink-0">
-                            <button
-                                onClick={() => setShowCompose(false)}
-                                className="px-4 py-3 text-[10px] font-black uppercase text-slate-400 hover:text-slate-600 transition-all"
-                            >
-                                Cancelar
-                            </button>
+                        <div className="p-4 md:p-6 border-t border-slate-50 bg-slate-50/30 flex justify-between items-center shrink-0">
                             <button
                                 onClick={async () => {
-                                    if (undoTimer) {
-                                        cancelSend();
-                                        return;
-                                    }
-                                    if (!composeTo || !composeSubject || !composeBody) {
-                                        alert('Completa los campos');
-                                        return;
-                                    }
-                                    setIsSending(true);
-
-                                    const timer = window.setTimeout(async () => {
-                                        try {
-                                            const response = await fetch('/api/mail/send', {
-                                                method: 'POST',
-                                                headers: { 'Content-Type': 'application/json' },
-                                                body: JSON.stringify({
-                                                    to: composeTo,
-                                                    subject: composeSubject,
-                                                    body: composeBody,
-                                                    fromName: senderAccount.split('@')[0].toUpperCase(),
-                                                    fromEmail: senderAccount
-                                                })
-                                            });
-                                            if (response.ok) {
-                                                alert('Enviado');
-                                                setShowCompose(false);
-                                                setComposeTo('');
-                                                setComposeSubject('');
-                                                setComposeBody('');
-                                            } else {
-                                                alert('Error');
-                                            }
-                                        } catch (e) { alert('Error'); }
-                                        finally { setIsSending(false); setUndoTimer(null); }
-                                    }, 5000);
-
-                                    setUndoTimer(timer);
+                                    if (!composeTo && !composeSubject) return;
+                                    await saveMessageToFirestore({
+                                        from: senderAccount,
+                                        to: composeTo,
+                                        subject: composeSubject || '(Borrador)',
+                                        body: composeBody,
+                                        status: 'DRAFT'
+                                    });
+                                    addToast('success', 'Borrador guardado');
+                                    setShowCompose(false);
                                 }}
-                                className={`px-6 md:px-8 py-3 rounded-xl md:rounded-2xl flex items-center gap-2 shadow-xl transition-all font-black text-[10px] uppercase tracking-widest ${undoTimer ? 'bg-red-500 text-white' : 'bg-green-700 hover:bg-green-600 text-white shadow-green-900/10'}`}
+                                className="px-4 py-3 text-[10px] font-black uppercase text-orange-500 hover:bg-orange-50 rounded-xl transition-all flex items-center gap-2"
                             >
-                                {isSending && !undoTimer ? <Loader2 size={16} className="animate-spin" /> : undoTimer ? <X size={16} /> : <Send size={16} />}
-                                <span className="hidden md:inline">{undoTimer ? 'DESHACER ENVÍO (5s)' : isSending ? 'Enviando...' : 'Enviar Correo'}</span>
-                                <span className="md:hidden">{undoTimer ? 'ANULAR' : 'Enviar'}</span>
+                                <Clock size={14} /> Guardar Borrador
                             </button>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setShowCompose(false)}
+                                    className="px-4 py-3 text-[10px] font-black uppercase text-slate-400 hover:text-slate-600 transition-all"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={async () => {
+                                        if (undoTimer) {
+                                            cancelSend();
+                                            return;
+                                        }
+                                        if (!composeTo || !composeSubject || !composeBody) {
+                                            alert('Completa los campos');
+                                            return;
+                                        }
+                                        setIsSending(true);
+
+                                        const timer = window.setTimeout(async () => {
+                                            try {
+                                                const response = await fetch('/api/mail/send', {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify({
+                                                        to: composeTo,
+                                                        subject: composeSubject,
+                                                        body: composeBody,
+                                                        fromName: senderAccount.split('@')[0].toUpperCase(),
+                                                        fromEmail: senderAccount
+                                                    })
+                                                });
+                                                if (response.ok) {
+                                                    alert('Enviado');
+                                                    setShowCompose(false);
+                                                    setComposeTo('');
+                                                    setComposeSubject('');
+                                                    setComposeBody('');
+                                                } else {
+                                                    alert('Error');
+                                                }
+                                            } catch (e) { alert('Error'); }
+                                            finally { setIsSending(false); setUndoTimer(null); }
+                                        }, 5000);
+
+                                        setUndoTimer(timer);
+                                    }}
+                                    className={`px-6 md:px-8 py-3 rounded-xl md:rounded-2xl flex items-center gap-2 shadow-xl transition-all font-black text-[10px] uppercase tracking-widest ${undoTimer ? 'bg-red-500 text-white' : 'bg-green-700 hover:bg-green-600 text-white shadow-green-900/10'}`}
+                                >
+                                    {isSending && !undoTimer ? <Loader2 size={16} className="animate-spin" /> : undoTimer ? <X size={16} /> : <Send size={16} />}
+                                    <span className="hidden md:inline">{undoTimer ? 'DESHACER ENVÍO (5s)' : isSending ? 'Enviando...' : 'Enviar Correo'}</span>
+                                    <span className="md:hidden">{undoTimer ? 'ANULAR' : 'Enviar'}</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
             )}
+
+            {/* Maximized Message View */}
+            {isMaximized && selectedMessage && (
+                <div className="fixed inset-0 z-[2500] bg-slate-950/40 backdrop-blur-md flex items-center justify-center p-4 md:p-10 animate-in fade-in zoom-in duration-300">
+                    <div className="bg-white w-full h-full max-w-6xl rounded-[2rem] shadow-2xl flex flex-col overflow-hidden border border-white/20">
+                        <div className="p-6 md:p-10 border-b border-slate-50 flex justify-between items-center bg-white/50 backdrop-blur-sm sticky top-0 z-10">
+                            <div className="flex items-center gap-6">
+                                <div className="w-14 h-14 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 font-black text-xl shadow-inner">
+                                    {selectedMessage.from.charAt(0).toUpperCase()}
+                                </div>
+                                <div>
+                                    <h2 className="text-xl md:text-3xl font-black text-slate-800 tracking-tight leading-tight">{selectedMessage.subject}</h2>
+                                    <div className="flex items-center gap-3 mt-2">
+                                        <span className="text-xs font-black uppercase tracking-widest text-slate-400">DE: {selectedMessage.from}</span>
+                                        <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
+                                        <span className="text-xs font-black uppercase tracking-widest text-slate-400">PARA: {selectedMessage.to}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setIsMaximized(false)}
+                                className="p-4 bg-slate-100 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-2xl transition-all group shadow-sm hover:shadow-md"
+                            >
+                                <X size={24} className="group-hover:rotate-90 transition-transform duration-300" />
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-8 md:p-16 text-slate-600 text-lg md:text-xl leading-relaxed whitespace-pre-wrap font-medium bg-gradient-to-b from-white to-slate-50/30">
+                            {selectedMessage.body}
+
+                            {selectedMessage.attachments && selectedMessage.attachments.length > 0 && (
+                                <div className="mt-12 p-8 bg-white/50 rounded-3xl border border-slate-100 shadow-sm">
+                                    <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 mb-6 flex items-center gap-3">
+                                        <Paperclip size={16} />
+                                        Documentos Adjuntos ({selectedMessage.attachments.length})
+                                    </p>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                        {selectedMessage.attachments.map((att, i) => (
+                                            <div key={i} className="group p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:bg-white hover:shadow-xl hover:border-green-100 transition-all cursor-pointer">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm">
+                                                        {att.contentType.includes('pdf') ? <Eye size={20} className="text-red-400" /> : <Paperclip size={20} className="text-slate-400" />}
+                                                    </div>
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="text-xs font-black text-slate-700 truncate uppercase tracking-tight">{att.filename}</p>
+                                                        <p className="text-[10px] font-bold text-slate-400 uppercase">{(att.size / 1024).toFixed(1)} KB</p>
+                                                    </div>
+                                                    <a href={att.url} download target="_blank" rel="noreferrer" className="p-2 text-slate-400 hover:text-green-600">
+                                                        <Download size={18} />
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Toasts / Notifications */}
+            <div className="fixed bottom-6 right-6 z-[3000] flex flex-col gap-3">
+                {toasts.map(toast => (
+                    <div
+                        key={toast.id}
+                        className={`flex items-center gap-4 px-6 py-4 rounded-3xl shadow-2xl backdrop-blur-xl border border-white/20 animate-in slide-in-from-right fade-in duration-300 ${toast.type === 'success' ? 'bg-green-600/90 text-white' : 'bg-blue-600/90 text-white'}`}
+                    >
+                        {toast.type === 'success' ? <ShieldCheck size={20} /> : <Mail size={20} />}
+                        <div>
+                            <p className="text-[10px] font-black uppercase tracking-widest">{toast.type === 'success' ? 'Éxito' : 'Notificación'}</p>
+                            <p className="text-[12px] font-bold">{toast.message}</p>
+                        </div>
+                    </div>
+                ))}
+            </div>
         </div>
     );
 };
