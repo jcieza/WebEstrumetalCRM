@@ -23,8 +23,11 @@ export async function POST(request: Request) {
         const allowedFroms = ["ventas@ciaestrumetal.com", "administracion@ciaestrumetal.com"];
         let fromAddress = "ventas@ciaestrumetal.com"; // Por defecto
 
-        if (fromEmail && allowedFroms.includes(fromEmail)) {
-            fromAddress = fromEmail;
+        // Permitir remitente si es de las cuentas oficiales o si pertenece al dominio oficial
+        if (fromEmail) {
+            if (allowedFroms.includes(fromEmail) || fromEmail.endsWith("@ciaestrumetal.com")) {
+                fromAddress = fromEmail;
+            }
         }
 
         const displayName = fromName || "Estrumetal CRM";
@@ -33,7 +36,7 @@ export async function POST(request: Request) {
             from: `${displayName} <${fromAddress}>`,
             to: recipients,
             subject: subject,
-            text: body,
+            html: body, // Usamos html en lugar de text para que el logo y firmas funcionen
         });
 
         if (error) {

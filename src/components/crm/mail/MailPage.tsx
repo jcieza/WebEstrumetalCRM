@@ -229,12 +229,18 @@ const MailPage = () => {
 
     const saveMessageToFirestore = async (msgData: Partial<EmailMessage>) => {
         try {
-            await addDoc(collection(db, 'incoming_messages'), {
+            console.log("DEBUG: Guardando mensaje...", msgData);
+            const docRef = await addDoc(collection(db, 'incoming_messages'), {
                 ...msgData,
                 receivedAt: new Date().toISOString(),
             });
+            console.log("DEBUG: Guardado exitoso con ID:", docRef.id);
+            return docRef.id;
         } catch (e) {
-            console.error("Error saving message:", e);
+            console.error("DEBUG: Error al guardar mensaje:", e);
+            if (msgData.status === 'DRAFT') {
+                alert("Error al guardar borrador: " + (e as any).message);
+            }
         }
     };
 
@@ -256,7 +262,7 @@ const MailPage = () => {
                 body: JSON.stringify({
                     to: selectedMessage.from,
                     subject: `Re: ${selectedMessage.subject}`,
-                    body: replyText + ESTRUMETAL_SIGNATURE,
+                    body: `<div style="font-family: ${bodyFont === 'serif' ? 'serif' : bodyFont === 'mono' ? 'monospace' : 'sans-serif'}">${replyText.replace(/\n/g, '<br/>')}${ESTRUMETAL_SIGNATURE}</div>`,
                     fromName: auth.currentUser?.displayName || senderAccount.split('@')[0].toUpperCase(),
                     fromEmail: senderAccount
                 })
@@ -274,7 +280,7 @@ const MailPage = () => {
                     from: senderAccount,
                     to: selectedMessage.from,
                     subject: `Re: ${selectedMessage.subject}`,
-                    body: replyText + ESTRUMETAL_SIGNATURE,
+                    body: `<div style="font-family: ${bodyFont === 'serif' ? 'serif' : bodyFont === 'mono' ? 'monospace' : 'sans-serif'}">${replyText.replace(/\n/g, '<br/>')}${ESTRUMETAL_SIGNATURE}</div>`,
                     receivedAt: new Date().toISOString(),
                     status: 'SENT'
                 });
@@ -350,55 +356,55 @@ const MailPage = () => {
     const accounts = Array.from(new Set(messages.map(m => m.to))).filter(Boolean);
 
     return (
-        <div className={`h-full flex flex-col gap-6 transition-colors duration-500 ${isMailSubdomain ? 'p-0' : ''} ${theme === 'dark' ? 'bg-slate-900 text-slate-100' : 'bg-transparent text-slate-800'}`}>
+        <div className={`h-full flex flex-col gap-6 transition-colors duration-500 ${isMailSubdomain ? 'p-4' : ''} ${theme === 'dark' ? 'bg-slate-900 text-slate-100' : 'bg-transparent text-slate-800'}`}>
             {/* Header */}
-            {!isMailSubdomain && (
-                <div className="flex justify-between items-center">
-                    <div>
-                        <h1 className="text-xl md:text-3xl font-black text-slate-800 tracking-tight uppercase">Comunicaciones</h1>
-                        <p className="text-slate-400 text-[8px] md:text-sm mt-1 font-medium uppercase tracking-widest leading-none">Bandeja @ciaestrumetal.com</p>
+            <div className="flex justify-between items-center">
+                <div>
+                    <h1 className="text-xl md:text-3xl font-black text-slate-800 tracking-tight uppercase">Comunicaciones</h1>
+                    <p className="text-slate-400 text-[8px] md:text-sm mt-1 font-medium uppercase tracking-widest leading-none">Bandeja @ciaestrumetal.com</p>
+                </div>
+                <div className="flex gap-2 md:gap-4 flex-1 max-w-md mx-4 hidden sm:flex">
+                    <div className="relative w-full">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
+                        <input
+                            type="text"
+                            placeholder="Buscar en Estrumetal Mail..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full bg-white border border-slate-100 rounded-xl py-2 pl-10 pr-4 text-[10px] font-bold uppercase tracking-widest outline-none focus:ring-2 focus:ring-green-500/10 transition-all placeholder:text-slate-200"
+                        />
                     </div>
-                    <div className="flex gap-2 md:gap-4 flex-1 max-w-md mx-4 hidden sm:flex">
-                        <div className="relative w-full">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
-                            <input
-                                type="text"
-                                placeholder="Buscar en Estrumetal Mail..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full bg-white border border-slate-100 rounded-xl py-2 pl-10 pr-4 text-[10px] font-bold uppercase tracking-widest outline-none focus:ring-2 focus:ring-green-500/10 transition-all placeholder:text-slate-200"
-                            />
-                        </div>
-                    </div>
-                    <div className="flex gap-2 md:gap-4">
-                        <button
-                            onClick={() => {
-                                setComposeTo('');
-                                setComposeSubject('');
-                                setComposeBody('');
-                                setShowCompose(true);
-                            }}
-                            className="bg-green-700 hover:bg-green-600 text-white p-2 md:px-6 md:py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-green-900/20 transition-all font-black text-[10px] uppercase tracking-wider"
-                        >
-                            <X size={20} className="rotate-45" />
-                            <span className="hidden md:inline">Redactar</span>
-                        </button>
+                </div>
+                <div className="flex gap-2 md:gap-4">
+                    <button
+                        onClick={() => {
+                            setComposeTo('');
+                            setComposeSubject('');
+                            setComposeBody('');
+                            setShowCompose(true);
+                        }}
+                        className="bg-green-700 hover:bg-green-600 text-white p-2 md:px-6 md:py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-green-900/20 transition-all font-black text-[10px] uppercase tracking-wider"
+                    >
+                        <X size={20} className="rotate-45" />
+                        <span className="hidden md:inline">Redactar</span>
+                    </button>
+                    {!isMailSubdomain && (
                         <div className="hidden sm:flex bg-green-50 px-4 py-2 rounded-xl border border-green-100 items-center gap-2">
                             <ShieldCheck size={18} className="text-green-600" />
                             <span className="text-[10px] font-black text-green-700 uppercase tracking-tighter">Microservicio Activo</span>
                         </div>
-                        {isMailSubdomain && (
-                            <button
-                                onClick={() => setShowSubSettings(true)}
-                                className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-all"
-                                title="Configuración de Cuenta"
-                            >
-                                <SettingsIcon size={20} />
-                            </button>
-                        )}
-                    </div>
+                    )}
+                    {isMailSubdomain && (
+                        <button
+                            onClick={() => setShowSubSettings(true)}
+                            className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-all"
+                            title="Configuración de Cuenta"
+                        >
+                            <SettingsIcon size={20} />
+                        </button>
+                    )}
                 </div>
-            )}
+            </div>
 
             {/* Subdomain Settings Modal */}
             {showSubSettings && (
@@ -633,11 +639,14 @@ const MailPage = () => {
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-1 md:gap-2">
-                                    <div className="hidden lg:flex items-center bg-slate-50 rounded-xl p-1 border border-slate-100 mr-2">
+                                    <div className="flex items-center bg-slate-50/80 backdrop-blur-sm rounded-xl p-1 border border-slate-100 mr-2 shadow-sm">
                                         {(['sans', 'serif', 'mono'] as const).map(f => (
                                             <button
                                                 key={f}
-                                                onClick={() => setBodyFont(f)}
+                                                onClick={() => {
+                                                    console.log("Changing font to:", f);
+                                                    setBodyFont(f);
+                                                }}
                                                 className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${bodyFont === f ? 'bg-white shadow-sm text-green-700' : 'text-slate-400 hover:text-slate-600'}`}
                                             >
                                                 {f === 'sans' ? 'Moderno' : f === 'serif' ? 'Clásico' : 'Código'}
@@ -679,7 +688,9 @@ const MailPage = () => {
                                 </div>
                             </div>
 
-                            <div className="flex-1 p-8 overflow-y-auto text-slate-600 text-sm leading-relaxed whitespace-pre-wrap font-medium flex flex-col gap-6">
+                            <div className={`flex-1 p-8 overflow-y-auto text-slate-600 text-sm leading-relaxed whitespace-pre-wrap font-medium flex flex-col gap-6 ${bodyFont === 'serif' ? 'font-serif' :
+                                bodyFont === 'mono' ? 'font-mono' : 'font-sans'
+                                }`}>
                                 <div className="min-h-[100px]">
                                     {selectedMessage.body}
                                 </div>
@@ -752,7 +763,20 @@ const MailPage = () => {
                                             </div>
                                             <div className="flex-1 overflow-hidden bg-slate-50 flex items-center justify-center relative">
                                                 {previewingFile.type.includes('pdf') ? (
-                                                    <iframe src={previewingFile.url} className="w-full h-full border-none" title="PDF" />
+                                                    <div className="w-full h-full flex flex-col">
+                                                        <iframe
+                                                            src={`https://docs.google.com/viewer?url=${encodeURIComponent(previewingFile.url)}&embedded=true`}
+                                                            className="w-full flex-1 border-none"
+                                                            title="PDF Viewer"
+                                                        />
+                                                        <div className="p-4 bg-orange-50/50 border-t border-orange-100 flex justify-between items-center shrink-0">
+                                                            <div className="flex flex-col gap-0.5">
+                                                                <p className="text-[10px] font-black text-orange-800 uppercase italic whitespace-nowrap">¿Error 403 o no carga?</p>
+                                                                <p className="text-[8px] font-bold text-orange-600 uppercase">Debes permitir el acceso o descargar directamente.</p>
+                                                            </div>
+                                                            <a href={previewingFile.url} target="_blank" rel="noreferrer" className="px-5 py-2 bg-orange-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg shadow-orange-200">Abrir Directo</a>
+                                                        </div>
+                                                    </div>
                                                 ) : previewingFile.type.includes('image') ? (
                                                     <img src={previewingFile.url} alt="Preview" className="max-w-full max-h-full object-contain shadow-2xl" />
                                                 ) : (
@@ -798,7 +822,10 @@ const MailPage = () => {
                                                 className="bg-slate-100 border-none rounded-lg px-2 py-1 text-[9px] font-black text-green-700 outline-none"
                                             >
                                                 <option value="ventas@ciaestrumetal.com">ventas@ciaestrumetal.com</option>
-                                                <option value="info@ciaestrumetal.com">info@ciaestrumetal.com</option>
+                                                <option value="administracion@ciaestrumetal.com">administracion@ciaestrumetal.com</option>
+                                                {auth.currentUser?.email && !['ventas@ciaestrumetal.com', 'administracion@ciaestrumetal.com'].includes(auth.currentUser.email) && (
+                                                    <option value={auth.currentUser.email}>{auth.currentUser.email}</option>
+                                                )}
                                             </select>
                                         </div>
                                     </div>
@@ -894,7 +921,10 @@ const MailPage = () => {
                                     className={`w-full border rounded-xl px-4 py-3 text-xs font-bold outline-none focus:ring-2 focus:ring-green-500/10 transition-all ${theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-slate-700'}`}
                                 >
                                     <option value="ventas@ciaestrumetal.com">ventas@ciaestrumetal.com</option>
-                                    <option value="info@ciaestrumetal.com">info@ciaestrumetal.com</option>
+                                    <option value="administracion@ciaestrumetal.com">administracion@ciaestrumetal.com</option>
+                                    {auth.currentUser?.email && !['ventas@ciaestrumetal.com', 'administracion@ciaestrumetal.com'].includes(auth.currentUser.email) && (
+                                        <option value={auth.currentUser.email}>{auth.currentUser.email}</option>
+                                    )}
                                 </select>
                             </div>
 
@@ -1001,7 +1031,7 @@ const MailPage = () => {
                                                     body: JSON.stringify({
                                                         to: composeTo,
                                                         subject: composeSubject,
-                                                        body: composeBody + ESTRUMETAL_SIGNATURE,
+                                                        body: `<div style="font-family: ${bodyFont === 'serif' ? 'serif' : bodyFont === 'mono' ? 'monospace' : 'sans-serif'}">${composeBody.replace(/\n/g, '<br/>')}${ESTRUMETAL_SIGNATURE}</div>`,
                                                         fromName: auth.currentUser?.displayName || senderAccount.split('@')[0].toUpperCase(),
                                                         fromEmail: senderAccount
                                                     })
