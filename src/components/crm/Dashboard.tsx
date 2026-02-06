@@ -166,8 +166,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                 {/* mini Chart */}
                 <div className="bg-white border border-gray-100 rounded-lg p-6 shadow-sm overflow-hidden">
                     <h3 className="text-sm font-black uppercase tracking-wider text-gray-700 mb-6 border-b border-gray-50 pb-4">Proyección de Ingresos</h3>
-                    <div className="h-[300px] w-full" style={{ minWidth: '0' }}>
-                        <ResponsiveContainer width="100%" height="100%">
+                    <div className="h-[300px] w-full relative" style={{ minWidth: '0', minHeight: '300px' }}>
+                        <ResponsiveContainer width="99%" height="100%">
                             <BarChart data={[
                                 { name: 'Ene', v: 4000 },
                                 { name: 'Feb', v: 3000 },

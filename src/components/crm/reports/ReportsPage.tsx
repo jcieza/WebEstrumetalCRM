@@ -107,8 +107,8 @@ const ReportsPage = () => {
                             <h3 className="text-sm font-black uppercase tracking-wider text-gray-800">Tendencia de {reports.find(r => r.id === reportType)?.name}</h3>
                             <div className="flex items-center gap-2 text-[10px] font-bold text-gray-400 uppercase"><Clock size={12} /> Tiempo Real</div>
                         </div>
-                        <div className="h-[350px] w-full">
-                            <ResponsiveContainer width="100%" height="100%">
+                        <div className="h-[350px] w-full relative" style={{ minWidth: '0', minHeight: '350px' }}>
+                            <ResponsiveContainer width="99%" height="100%">
                                 <BarChart data={[
                                     { name: 'L', v: 400 }, { name: 'M', v: 300 }, { name: 'M', v: 550 },
                                     { name: 'J', v: 480 }, { name: 'V', v: 620 }, { name: 'S', v: 210 }

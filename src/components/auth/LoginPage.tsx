@@ -105,8 +105,8 @@ const LoginPage: React.FC = () => {
                                             type="email"
                                             placeholder="CORREO ELECTRÓNICO"
                                             value={email}
-                                            onChange={(e) => setEmail(e.target.value)}
-                                            className="w-full bg-white/5 border border-white/5 rounded-2xl py-4 px-6 text-white text-[10px] font-bold uppercase tracking-widest outline-none focus:border-green-500/50 focus:bg-white/10 transition-all"
+                                            onChange={(e) => setEmail(e.target.value.toLowerCase())}
+                                            className="w-full bg-white/5 border border-white/5 rounded-2xl py-4 px-6 text-white text-[10px] font-bold tracking-widest outline-none focus:border-green-500/50 focus:bg-white/10 transition-all"
                                             required
                                         />
                                     </div>
@@ -116,7 +116,7 @@ const LoginPage: React.FC = () => {
                                             placeholder="CONTRASEÑA"
                                             value={password}
                                             onChange={(e) => setPassword(e.target.value)}
-                                            className="w-full bg-white/5 border border-white/5 rounded-2xl py-4 px-6 pr-14 text-white text-[10px] font-bold uppercase tracking-widest outline-none focus:border-green-500/50 focus:bg-white/10 transition-all"
+                                            className="w-full bg-white/5 border border-white/5 rounded-2xl py-4 px-6 pr-14 text-white text-[10px] font-bold tracking-widest outline-none focus:border-green-500/50 focus:bg-white/10 transition-all"
                                             required
                                         />
                                         <button

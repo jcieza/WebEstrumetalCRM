@@ -8,7 +8,8 @@ import {
     onAuthStateChanged,
     User,
     setPersistence,
-    browserLocalPersistence
+    browserLocalPersistence,
+    updateProfile as firebaseUpdateProfile
 } from 'firebase/auth';
 import { auth, googleProvider } from '@/lib/firebase';
 
@@ -19,6 +20,7 @@ interface AuthContextType {
     login: () => Promise<void>;
     loginWithEmail: (email: string, pass: string) => Promise<void>;
     logout: () => Promise<void>;
+    updateProfile: (displayName?: string, photoURL?: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -96,8 +98,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     };
 
+    const updateProfile = async (displayName?: string, photoURL?: string) => {
+        if (!auth.currentUser) return;
+        try {
+            await firebaseUpdateProfile(auth.currentUser, {
+                displayName: displayName || auth.currentUser.displayName,
+                photoURL: photoURL || auth.currentUser.photoURL
+            });
+            // Update local user state to reflect changes
+            setUser({ ...auth.currentUser } as User);
+        } catch (error) {
+            console.error("Update Profile Error:", error);
+            throw error;
+        }
+    };
+
     return (
-        <AuthContext.Provider value={{ user, loading, authorized, login, loginWithEmail, logout }}>
+        <AuthContext.Provider value={{ user, loading, authorized, login, loginWithEmail, logout, updateProfile }}>
             {children}
         </AuthContext.Provider>
     );
