@@ -35,3 +35,8 @@ env:
     value: 1EsH1s2AMhlzqzFdK8EnZFeziw__CGcg7
   - variable: DRIVE_CSV_FOLDER_ID
     value: 1R_ZxP2uhm9aiOF70NhEEpigwrDQsavtW
+  - variable: RESEND_API_KEY
+    secret: RESEND_API_KEY
+    availability:
+      - BUILD
+      - RUNTIME
