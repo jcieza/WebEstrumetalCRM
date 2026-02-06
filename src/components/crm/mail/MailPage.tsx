@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Mail, Search, Clock, User, ArrowRight, ShieldCheck, Inbox, Archive, Trash2, Send, Paperclip, Download, Loader2 } from 'lucide-react';
+import { Mail, Search, Clock, User, ArrowRight, ShieldCheck, Inbox, Archive, Trash2, Send, Paperclip, Download, Loader2, Eye, X } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 
@@ -30,6 +30,7 @@ const MailPage = () => {
     const [replyText, setReplyText] = useState('');
     const [isSending, setIsSending] = useState(false);
     const [showMobileDetail, setShowMobileDetail] = useState(false);
+    const [previewingPdf, setPreviewingPdf] = useState<string | null>(null);
 
     useEffect(() => {
         const q = query(collection(db, 'incoming_messages'), orderBy('receivedAt', 'desc'));
@@ -130,11 +131,11 @@ const MailPage = () => {
             {/* Main Layout */}
             <div className="flex-1 flex gap-6 overflow-hidden min-h-0">
                 {/* Inbox List */}
-                <div className={`w-full md:w-1/3 bg-white border border-slate-100 rounded-2xl shadow-sm flex flex-col overflow-hidden ${showMobileDetail ? 'hidden md:flex' : 'flex'}`}>
-                    <div className="p-4 border-b border-slate-50 flex items-center gap-3 bg-slate-50/50">
+                <div className={`transition-all duration-500 bg-white border border-slate-100 rounded-2xl shadow-sm flex flex-col overflow-hidden ${showMobileDetail ? 'hidden md:flex' : 'flex'} ${selectedMessage ? 'md:w-20 lg:w-80' : 'md:w-1/3'}`}>
+                    <div className={`p-4 border-b border-slate-50 flex items-center gap-3 bg-slate-50/50 transition-all ${selectedMessage ? 'md:justify-center lg:justify-start' : ''}`}>
                         <Inbox size={18} className="text-slate-400" />
-                        <span className="text-xs font-black uppercase text-slate-600">Mensajes Recientes</span>
-                        <span className="ml-auto bg-green-600 text-white px-2 py-0.5 rounded-full text-[9px] font-black">
+                        <span className={`text-xs font-black uppercase text-slate-600 ${selectedMessage ? 'md:hidden lg:inline' : ''}`}>Mensajes Recientes</span>
+                        <span className={`ml-auto bg-green-600 text-white px-2 py-0.5 rounded-full text-[9px] font-black ${selectedMessage ? 'md:hidden lg:inline' : ''}`}>
                             {messages.filter(m => m.status === 'NEW').length}
                         </span>
                     </div>
@@ -158,24 +159,30 @@ const MailPage = () => {
                                         setSelectedMessage(msg);
                                         if (msg.status === 'NEW') markAsRead(msg.id);
                                         setShowMobileDetail(true);
+                                        setPreviewingPdf(null);
                                     }}
-                                    className={`w-full text-left p-4 border-b border-slate-50 transition-all hover:bg-slate-50 flex flex-col gap-1 ${selectedMessage?.id === msg.id ? 'bg-green-50/50 border-l-4 border-l-green-600' : ''}`}
+                                    className={`w-full text-left p-4 border-b border-slate-50 transition-all hover:bg-slate-50 flex flex-col gap-1 ${selectedMessage?.id === msg.id ? 'bg-green-50/50 border-l-4 border-l-green-600' : ''} ${selectedMessage ? 'md:items-center lg:items-start' : ''}`}
                                 >
-                                    <div className="flex justify-between items-center">
-                                        <div className="flex items-center gap-1">
-                                            <span className={`text-[10px] font-black uppercase tracking-tight ${msg.status === 'NEW' ? 'text-green-700' : 'text-slate-400'}`}>
+                                    <div className="flex justify-between items-center w-full">
+                                        <div className="flex items-center gap-1 min-w-0">
+                                            <span className={`text-[10px] font-black uppercase tracking-tight truncate ${msg.status === 'NEW' ? 'text-green-700' : 'text-slate-400'} ${selectedMessage ? 'md:hidden lg:inline-block' : ''}`}>
                                                 {msg.from.split('<')[0] || msg.from}
                                             </span>
-                                            {msg.attachments && msg.attachments.length > 0 && <Paperclip size={10} className="text-slate-300" />}
+                                            {selectedMessage && (
+                                                <div className="md:w-8 md:h-8 lg:hidden bg-slate-100 rounded-full flex items-center justify-center text-[10px] font-bold text-slate-400">
+                                                    {(msg.from.split('<')[0] || msg.from).charAt(0).toUpperCase()}
+                                                </div>
+                                            )}
+                                            {msg.attachments && msg.attachments.length > 0 && <Paperclip size={10} className={`text-slate-300 ${selectedMessage ? 'md:hidden lg:inline' : ''}`} />}
                                         </div>
-                                        <span className="text-[9px] text-slate-300 font-mono">
+                                        <span className={`text-[9px] text-slate-300 font-mono ${selectedMessage ? 'md:hidden lg:inline' : ''}`}>
                                             {new Date(msg.receivedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                         </span>
                                     </div>
-                                    <h4 className={`text-xs truncate font-bold ${msg.status === 'NEW' ? 'text-slate-800' : 'text-slate-500'}`}>
+                                    <h4 className={`text-xs truncate font-bold w-full ${msg.status === 'NEW' ? 'text-slate-800' : 'text-slate-500'} ${selectedMessage ? 'md:hidden lg:inline' : ''}`}>
                                         {msg.subject || '(Sin Asunto)'}
                                     </h4>
-                                    <p className="text-[10px] text-slate-400 line-clamp-1 italic">
+                                    <p className={`text-[10px] text-slate-400 line-clamp-1 italic ${selectedMessage ? 'md:hidden lg:inline' : ''}`}>
                                         {msg.body.substring(0, 60)}...
                                     </p>
                                 </button>
@@ -230,21 +237,51 @@ const MailPage = () => {
                                         </p>
                                         <div className="flex flex-wrap gap-2">
                                             {selectedMessage.attachments.map((att, idx) => (
-                                                <a
-                                                    key={idx}
-                                                    href={att.url}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="flex items-center gap-3 px-4 py-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all shadow-sm"
-                                                >
+                                                <div key={idx} className="flex items-center gap-3 px-4 py-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all shadow-sm">
                                                     <div className="text-[10px] flex flex-col">
                                                         <span className="font-black text-slate-700 truncate max-w-[150px]">{att.filename}</span>
                                                         <span className="text-[8px] text-slate-400 uppercase">{(att.size / 1024).toFixed(1)} KB</span>
                                                     </div>
-                                                    <Download size={14} className="text-green-600" />
-                                                </a>
+                                                    <div className="flex gap-2">
+                                                        {att.contentType.includes('pdf') && (
+                                                            <button
+                                                                onClick={() => setPreviewingPdf(att.url)}
+                                                                className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                                                            >
+                                                                <Eye size={14} />
+                                                            </button>
+                                                        )}
+                                                        <a
+                                                            href={att.url}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition-all"
+                                                        >
+                                                            <Download size={14} />
+                                                        </a>
+                                                    </div>
+                                                </div>
                                             ))}
                                         </div>
+                                    </div>
+                                )}
+
+                                {/* PDF Previewer */}
+                                {previewingPdf && (
+                                    <div className="mt-6 border border-slate-100 rounded-2xl overflow-hidden shadow-xl bg-slate-50 h-[600px] relative">
+                                        <div className="absolute top-2 right-2 z-10">
+                                            <button
+                                                onClick={() => setPreviewingPdf(null)}
+                                                className="bg-white/80 hover:bg-white p-2 rounded-full shadow-md text-slate-600 transition-all"
+                                            >
+                                                <X size={16} />
+                                            </button>
+                                        </div>
+                                        <iframe
+                                            src={previewingPdf}
+                                            className="w-full h-full border-none"
+                                            title="PDF Preview"
+                                        />
                                     </div>
                                 )}
 

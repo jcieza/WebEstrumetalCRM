@@ -38,7 +38,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
     }, []);
 
     const isMobileLayout = isTabletMode || isPhoneMode;
-    const isCollapsed = activeTab === 'messages';
+    const isCollapsed = activeTab === 'emails' || activeTab === 'messages'; // Ensure both synonyms/variants collapse
     const showSidebar = !isMobileLayout;
 
     // Widths
