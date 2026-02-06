@@ -30,6 +30,8 @@ const AUTHORIZED_USERS = [
     's7Mtyvp9mOc6aQUT2XxZcrgajZl1' // Benjamin's Specific UID
 ];
 
+const ALLOWED_DOMAINS = ['ciaestrumetal.com', 'ciaestrumetal.online'];
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
@@ -52,8 +54,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const unsubscribe = onAuthStateChanged(auth, (user) => {
             if (user) {
                 setUser(user);
-                const isAuthorized = AUTHORIZED_USERS.includes(user.email || '') ||
-                    AUTHORIZED_USERS.includes(user.uid);
+                const email = user.email || '';
+                const domain = email.split('@')[1];
+                const isAuthorized = AUTHORIZED_USERS.includes(email) ||
+                    AUTHORIZED_USERS.includes(user.uid) ||
+                    ALLOWED_DOMAINS.includes(domain);
                 setAuthorized(isAuthorized);
             } else {
                 setUser(null);

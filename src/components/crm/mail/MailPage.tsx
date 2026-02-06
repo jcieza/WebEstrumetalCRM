@@ -66,11 +66,12 @@ const MailPage = () => {
     });
 
     const ESTRUMETAL_SIGNATURE = `
-
-<div style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 10px; font-family: sans-serif;">
-    <img src="https://mail.ciaestrumetal.online/logo-estrumetal.png" alt="Estrumetal" style="width: 120px; height: auto; margin-bottom: 5px;" />
-    <p style="font-size: 10px; color: #666; font-weight: bold; margin: 0;">ESTRUMETAL | Central de Operaciones</p>
-    <p style="font-size: 8px; color: #999; margin-top: 5px; font-style: italic;">Este es un correo profesional de Estrumetal. Si usted no es el destinatario de este correo y le llegó por error, por favor ignórelo.</p>
+<div style="margin-top: 12px; border-top: 1px solid #eee; padding-top: 10px; font-family: sans-serif;">
+    <img src="https://mail.ciaestrumetal.online/logo-estrumetal.png" alt="Estrumetal" style="width: 155px; height: auto; display: block; margin-bottom: 4px;" />
+    <div style="line-height: 1.1;">
+        <p style="font-size: 11px; color: #333; font-weight: 800; margin: 0; text-transform: uppercase;">ESTRUMETAL | Central de Operaciones</p>
+        <p style="font-size: 9px; color: #888; margin: 4px 0 0 0; font-style: italic; line-height: 1.3;">Este es un correo profesional de Estrumetal. Si usted no es el destinatario de este correo y le llegó por error, por favor ignórelo.</p>
+    </div>
 </div>`;
 
     useEffect(() => {
@@ -454,8 +455,23 @@ const MailPage = () => {
                                     <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
                                         {theme === 'light' ? <Clock size={18} className="text-orange-500" /> : <ShieldCheck size={18} className="text-slate-600" />}
                                     </div>
-                                    <span className="text-[10px] font-black uppercase text-slate-600 tracking-wider">{theme === 'light' ? 'Modo Oscuro' : 'Modo Claro'}</span>
+                                    <span className="text-[10px] font-black uppercase text-slate-600 tracking-wider font-sans">{theme === 'light' ? 'Modo Oscuro' : 'Modo Claro'}</span>
                                 </button>
+
+                                <div className="pt-2 border-t border-slate-50">
+                                    <h5 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">Tipografía de Envío</h5>
+                                    <div className="grid grid-cols-3 gap-2 bg-slate-50 p-2 rounded-2xl border border-slate-100">
+                                        {(['sans', 'serif', 'mono'] as const).map(f => (
+                                            <button
+                                                key={f}
+                                                onClick={() => setBodyFont(f)}
+                                                className={`py-2.5 rounded-xl text-[9px] font-black uppercase transition-all ${bodyFont === f ? 'bg-white shadow-md text-green-700' : 'text-slate-400 hover:text-slate-600'}`}
+                                            >
+                                                {f === 'sans' ? 'Moderno' : f === 'serif' ? 'Clásico' : 'Código'}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
                                 <button onClick={() => auth.signOut()} className="w-full p-4 bg-red-50 hover:bg-red-100 rounded-2xl flex items-center gap-4 transition-all group border border-red-100">
                                     <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
                                         <X size={18} className="text-red-500" />
@@ -639,20 +655,6 @@ const MailPage = () => {
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-1 md:gap-2">
-                                    <div className="flex items-center bg-slate-50/80 backdrop-blur-sm rounded-xl p-1 border border-slate-100 mr-2 shadow-sm">
-                                        {(['sans', 'serif', 'mono'] as const).map(f => (
-                                            <button
-                                                key={f}
-                                                onClick={() => {
-                                                    console.log("Changing font to:", f);
-                                                    setBodyFont(f);
-                                                }}
-                                                className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${bodyFont === f ? 'bg-white shadow-sm text-green-700' : 'text-slate-400 hover:text-slate-600'}`}
-                                            >
-                                                {f === 'sans' ? 'Moderno' : f === 'serif' ? 'Clásico' : 'Código'}
-                                            </button>
-                                        ))}
-                                    </div>
                                     <button
                                         onClick={() => markAsUnread(selectedMessage.id)}
                                         className="p-2 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition-all border border-transparent"
@@ -1037,7 +1039,16 @@ const MailPage = () => {
                                                     })
                                                 });
                                                 if (response.ok) {
-                                                    alert('Enviado');
+                                                    // Guardar en Firestore para que aparezca en "Enviados"
+                                                    await addDoc(collection(db, 'incoming_messages'), {
+                                                        from: senderAccount,
+                                                        to: composeTo,
+                                                        subject: composeSubject,
+                                                        body: `<div style="font-family: ${bodyFont === 'serif' ? 'serif' : bodyFont === 'mono' ? 'monospace' : 'sans-serif'}">${composeBody.replace(/\n/g, '<br/>')}${ESTRUMETAL_SIGNATURE}</div>`,
+                                                        receivedAt: new Date().toISOString(),
+                                                        status: 'SENT'
+                                                    });
+                                                    addToast('success', 'Mensaje enviado correctamente');
                                                     setShowCompose(false);
                                                     setComposeTo('');
                                                     setComposeSubject('');
