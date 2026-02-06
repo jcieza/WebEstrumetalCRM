@@ -12,6 +12,8 @@ export async function GET(req: NextRequest) {
 
         const { searchParams } = new URL(req.url);
         const category = searchParams.get('category');
+        const limitCount = parseInt(searchParams.get('limit') || '20');
+        const startAfterId = searchParams.get('startAfter');
 
         let query: any = adminDb.collection('inventory');
 
@@ -19,13 +21,28 @@ export async function GET(req: NextRequest) {
             query = query.where('category', '==', category);
         }
 
-        const snapshot = await query.orderBy('name').get();
+        query = query.orderBy('name').limit(limitCount);
+
+        if (startAfterId) {
+            const lastDoc = await adminDb.collection('inventory').doc(startAfterId).get();
+            if (lastDoc.exists) {
+                query = query.startAfter(lastDoc);
+            }
+        }
+
+        const snapshot = await query.get();
         const items = snapshot.docs.map((doc: any) => ({
             id: doc.id,
             ...doc.data()
         }));
 
-        return NextResponse.json(items);
+        const lastId = snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1].id : null;
+
+        return NextResponse.json({
+            items,
+            lastId,
+            hasMore: items.length === limitCount
+        });
     } catch (error: any) {
         console.error('Error fetching inventory:', error);
         return NextResponse.json([], { status: 500 });

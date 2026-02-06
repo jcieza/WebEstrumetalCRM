@@ -10,21 +10,41 @@ const InventoryPage = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [items, setItems] = useState<InventoryItem[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [lastId, setLastId] = useState<string | null>(null);
+    const [hasMore, setHasMore] = useState(false);
 
     useEffect(() => {
         fetchItems();
     }, []);
 
-    const fetchItems = async () => {
-        setLoading(true);
+    const fetchItems = async (isLoadMore = false) => {
+        if (isLoadMore) setLoadingMore(true);
+        else setLoading(true);
+
         try {
-            const res = await fetch('/api/inventory');
+            const url = new URL('/api/inventory', window.location.origin);
+            url.searchParams.set('limit', '20');
+            if (isLoadMore && lastId) {
+                url.searchParams.set('startAfter', lastId);
+            }
+
+            const res = await fetch(url.toString());
             const data = await res.json();
-            setItems(data);
+
+            if (isLoadMore) {
+                setItems(prev => [...prev, ...data.items]);
+            } else {
+                setItems(data.items);
+            }
+
+            setLastId(data.lastId);
+            setHasMore(data.hasMore);
         } catch (error) {
             console.error("Error fetching inventory:", error);
         } finally {
             setLoading(false);
+            setLoadingMore(false);
         }
     };
 
@@ -118,14 +138,29 @@ const InventoryPage = () => {
             </div>
 
             {/* Content View */}
-            <div className="flex-1 min-h-0 overflow-hidden">
+            <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar pb-10">
                 {view === 'list' ? (
-                    <InventoryTable
-                        items={filteredItems}
-                        onEdit={(item) => console.log('Edit', item)}
-                        onView={(item) => console.log('View', item)}
-                        onDelete={(id) => console.log('Delete', id)}
-                    />
+                    <div className="flex flex-col gap-6">
+                        <InventoryTable
+                            items={filteredItems}
+                            onEdit={(item) => console.log('Edit', item)}
+                            onView={(item) => console.log('View', item)}
+                            onDelete={(id) => console.log('Delete', id)}
+                        />
+
+                        {hasMore && (
+                            <div className="flex justify-center mt-4">
+                                <button
+                                    onClick={() => fetchItems(true)}
+                                    disabled={loadingMore}
+                                    className="px-8 py-3 bg-white border border-gray-100 rounded-2xl text-gray-500 font-black text-[10px] uppercase tracking-[2px] shadow-sm hover:shadow-md transition-all disabled:opacity-50 flex items-center gap-2"
+                                >
+                                    {loadingMore ? <Zap size={16} className="animate-spin text-orange-500" /> : <Plus size={16} />}
+                                    {loadingMore ? 'Cargando...' : 'Cargar más materiales'}
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 ) : (
                     <div className="glass-card p-20 text-center border-none bg-white">
                         <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center text-gray-300 mx-auto mb-6">
