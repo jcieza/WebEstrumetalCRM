@@ -130,18 +130,18 @@ const MailPage = () => {
             {/* Header */}
             <div className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-3xl font-black text-slate-800 tracking-tight uppercase">Centro de Comunicaciones</h1>
-                    <p className="text-slate-400 text-sm mt-1 font-medium uppercase tracking-widest leading-none">Bandeja de Entrada @ciaestrumetal.com</p>
+                    <h1 className="text-xl md:text-3xl font-black text-slate-800 tracking-tight uppercase">Comunicaciones</h1>
+                    <p className="text-slate-400 text-[8px] md:text-sm mt-1 font-medium uppercase tracking-widest leading-none">Bandeja @ciaestrumetal.com</p>
                 </div>
-                <div className="flex gap-4">
+                <div className="flex gap-2 md:gap-4">
                     <button
                         onClick={() => setShowCompose(true)}
-                        className="bg-green-700 hover:bg-green-600 text-white px-6 py-2.5 rounded-xl flex items-center gap-2 shadow-lg shadow-green-900/20 transition-all font-black text-[10px] uppercase tracking-wider"
+                        className="bg-green-700 hover:bg-green-600 text-white p-2 md:px-6 md:py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-green-900/20 transition-all font-black text-[10px] uppercase tracking-wider"
                     >
-                        <X size={16} className="rotate-45" />
-                        Redactar Nuevo
+                        <X size={20} className="rotate-45" />
+                        <span className="hidden md:inline">Redactar</span>
                     </button>
-                    <div className="bg-green-50 px-4 py-2 rounded-xl border border-green-100 flex items-center gap-2">
+                    <div className="hidden sm:flex bg-green-50 px-4 py-2 rounded-xl border border-green-100 items-center gap-2">
                         <ShieldCheck size={18} className="text-green-600" />
                         <span className="text-[10px] font-black text-green-700 uppercase tracking-tighter">Microservicio Activo</span>
                     </div>
@@ -282,9 +282,9 @@ const MailPage = () => {
                                         </p>
                                         <div className="flex flex-wrap gap-2">
                                             {selectedMessage.attachments.map((att, idx) => (
-                                                <div key={idx} className="flex items-center gap-3 px-4 py-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all shadow-sm">
-                                                    <div className="text-[10px] flex flex-col">
-                                                        <span className="font-black text-slate-700 truncate max-w-[150px]">{att.filename}</span>
+                                                <div key={idx} className="flex items-center gap-3 px-3 md:px-4 py-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all shadow-sm">
+                                                    <div className="text-[10px] flex flex-col min-w-0 flex-1">
+                                                        <span className="font-black text-slate-700 truncate">{att.filename}</span>
                                                         <span className="text-[8px] text-slate-400 uppercase">{(att.size / 1024).toFixed(1)} KB</span>
                                                     </div>
                                                     <div className="flex gap-2">
@@ -313,16 +313,16 @@ const MailPage = () => {
 
                                 {/* PDF Lightbox Modal */}
                                 {previewingPdf && (
-                                    <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 md:p-10">
+                                    <div className="fixed inset-0 z-[2000] flex items-center justify-center md:p-10">
                                         <div
-                                            className="absolute inset-0 bg-slate-950/60 backdrop-blur-md"
+                                            className="absolute inset-0 bg-slate-950/80 backdrop-blur-md"
                                             onClick={() => setPreviewingPdf(null)}
                                         />
-                                        <div className="relative w-full max-w-5xl h-full bg-white rounded-[40px] shadow-2xl overflow-hidden flex flex-col border border-white/20">
-                                            <div className="p-4 border-b border-slate-50 flex justify-between items-center bg-white/80 backdrop-blur-xl">
+                                        <div className="relative w-full max-w-5xl h-full bg-white md:rounded-[40px] shadow-2xl overflow-hidden flex flex-col">
+                                            <div className="p-4 border-b border-slate-50 flex justify-between items-center bg-white/80 backdrop-blur-xl shrink-0">
                                                 <div className="flex items-center gap-3">
                                                     <div className="w-8 h-8 bg-red-50 text-red-500 rounded-lg flex items-center justify-center font-black text-[10px]">PDF</div>
-                                                    <span className="text-xs font-black uppercase text-slate-700 tracking-tight">Visor de Documentos Estrumetal</span>
+                                                    <span className="text-[10px] md:text-xs font-black uppercase text-slate-700 tracking-tight truncate max-w-[120px] md:max-w-none">Visor Estrumetal</span>
                                                 </div>
                                                 <div className="flex items-center gap-2">
                                                     <a href={previewingPdf} download className="p-2 text-slate-400 hover:text-green-600 transition-all"><Download size={20} /></a>
@@ -334,11 +334,13 @@ const MailPage = () => {
                                                     </button>
                                                 </div>
                                             </div>
-                                            <iframe
-                                                src={previewingPdf}
-                                                className="w-full flex-1 border-none"
-                                                title="PDF Preview"
-                                            />
+                                            <div className="flex-1 overflow-hidden bg-slate-100">
+                                                <iframe
+                                                    src={previewingPdf}
+                                                    className="w-full h-full border-none"
+                                                    title="PDF Preview"
+                                                />
+                                            </div>
                                         </div>
                                     </div>
                                 )}
@@ -392,15 +394,15 @@ const MailPage = () => {
                         className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm"
                         onClick={() => setShowCompose(false)}
                     />
-                    <div className="relative w-full max-w-2xl bg-white rounded-[32px] shadow-2xl overflow-hidden flex flex-col border border-slate-100 flex-1 h-[600px]">
-                        <div className="p-6 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+                    <div className="relative w-full max-w-2xl bg-white md:rounded-[32px] shadow-2xl overflow-hidden flex flex-col border border-slate-100 h-full md:h-[600px]">
+                        <div className="p-4 md:p-6 border-b border-slate-50 flex justify-between items-center bg-slate-50/50 shrink-0">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-green-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-green-200">
-                                    <Send size={20} />
+                                <div className="w-8 h-8 md:w-10 md:h-10 bg-green-600 text-white rounded-xl md:rounded-2xl flex items-center justify-center shadow-lg shadow-green-200">
+                                    <Send size={18} />
                                 </div>
                                 <div>
-                                    <h3 className="text-sm font-black uppercase text-slate-800 tracking-tight">Nuevo Mensaje Comercial</h3>
-                                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">@ciaestrumetal.com</p>
+                                    <h3 className="text-xs md:text-sm font-black uppercase text-slate-800 tracking-tight">Nuevo Mensaje</h3>
+                                    <p className="text-[7px] md:text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">@ciaestrumetal.com</p>
                                 </div>
                             </div>
                             <button
@@ -411,7 +413,7 @@ const MailPage = () => {
                             </button>
                         </div>
 
-                        <div className="p-6 flex flex-col gap-4 overflow-y-auto">
+                        <div className="p-4 md:p-6 flex flex-col gap-4 overflow-y-auto flex-1">
                             <div className="flex flex-col gap-1.5">
                                 <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Desde</label>
                                 <select
@@ -425,7 +427,7 @@ const MailPage = () => {
                             </div>
 
                             <div className="flex flex-col gap-1.5">
-                                <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Para (Cliente)</label>
+                                <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Para</label>
                                 <input
                                     type="email"
                                     placeholder="ejemplo@cliente.com"
@@ -439,36 +441,35 @@ const MailPage = () => {
                                 <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Asunto</label>
                                 <input
                                     type="text"
-                                    placeholder="COTIZACIÓN ESTRUMETAL - ORD-XXXX"
+                                    placeholder="ASUNTO DEL MENSAJE"
                                     value={composeSubject}
                                     onChange={(e) => setComposeSubject(e.target.value)}
-                                    className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-xs font-black uppercase tracking-tight text-slate-800 outline-none focus:ring-2 focus:ring-green-500/10 transition-all placeholder:text-slate-200"
+                                    className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-xs font-black uppercase tracking-tight text-slate-800 outline-none focus:ring-2 focus:ring-green-500/10 transition-all"
                                 />
                             </div>
 
-                            <div className="flex flex-col gap-1.5">
+                            <div className="flex flex-col gap-1.5 flex-1">
                                 <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Mensaje</label>
                                 <textarea
-                                    rows={8}
+                                    className="w-full flex-1 min-h-[150px] bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-xs font-medium text-slate-600 outline-none focus:ring-2 focus:ring-green-500/10 transition-all resize-none"
                                     placeholder="Escribe el cuerpo del correo aquí..."
                                     value={composeBody}
                                     onChange={(e) => setComposeBody(e.target.value)}
-                                    className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-xs font-medium text-slate-600 outline-none focus:ring-2 focus:ring-green-500/10 transition-all resize-none"
                                 />
                             </div>
                         </div>
 
-                        <div className="p-6 border-t border-slate-50 bg-slate-50/30 flex justify-end gap-3">
+                        <div className="p-4 md:p-6 border-t border-slate-50 bg-slate-50/30 flex justify-end gap-3 shrink-0">
                             <button
                                 onClick={() => setShowCompose(false)}
-                                className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 hover:text-slate-600 transition-all"
+                                className="px-4 py-3 text-[10px] font-black uppercase text-slate-400 hover:text-slate-600 transition-all"
                             >
                                 Cancelar
                             </button>
                             <button
                                 onClick={async () => {
                                     if (!composeTo || !composeSubject || !composeBody) {
-                                        alert('Por favor completa todos los campos');
+                                        alert('Completa los campos');
                                         return;
                                     }
                                     setIsSending(true);
@@ -485,22 +486,23 @@ const MailPage = () => {
                                             })
                                         });
                                         if (response.ok) {
-                                            alert('Mensaje enviado');
+                                            alert('Enviado');
                                             setShowCompose(false);
                                             setComposeTo('');
                                             setComposeSubject('');
                                             setComposeBody('');
                                         } else {
-                                            alert('Error al enviar');
+                                            alert('Error');
                                         }
-                                    } catch (e) { alert('Error crítico'); }
+                                    } catch (e) { alert('Error'); }
                                     finally { setIsSending(false); }
                                 }}
                                 disabled={isSending}
-                                className="bg-green-700 hover:bg-green-600 text-white px-8 py-3 rounded-2xl flex items-center gap-2 shadow-xl shadow-green-900/10 transition-all font-black text-[10px] uppercase tracking-widest disabled:opacity-50"
+                                className="bg-green-700 hover:bg-green-600 text-white px-6 md:px-8 py-3 rounded-xl md:rounded-2xl flex items-center gap-2 shadow-xl shadow-green-900/10 transition-all font-black text-[10px] uppercase tracking-widest disabled:opacity-50"
                             >
                                 {isSending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                                Enviar Mensaje
+                                <span className="hidden md:inline">Enviar Correo</span>
+                                <span className="md:hidden">Enviar</span>
                             </button>
                         </div>
                     </div>
