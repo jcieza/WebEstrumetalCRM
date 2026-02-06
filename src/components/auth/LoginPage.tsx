@@ -171,18 +171,15 @@ const LoginPage: React.FC = () => {
                     <LogIn size={12} />
                     <span>Sistema Seguro Estrumetal</span>
                 </div>
-            </div>
-                    )}
-        </div>
 
-                {/* Footer Info */ }
-    <div className="mt-12 text-center">
-        <p className="text-slate-600 text-[9px] font-bold uppercase tracking-[0.3em]">
-            v2.4.0 • Build 2026-02-05
-        </p>
-    </div>
-            </div >
-        </div >
+                {/* Footer Info */}
+                <div className="mt-12 text-center">
+                    <p className="text-slate-600 text-[9px] font-bold uppercase tracking-[0.3em]">
+                        v2.4.0 • Build 2026-02-05
+                    </p>
+                </div>
+            </div>
+        </div>
     );
 };
 
