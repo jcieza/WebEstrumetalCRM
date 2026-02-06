@@ -16,10 +16,11 @@ interface Attachment {
 interface EmailMessage {
     id: string;
     from: string;
+    to: string; // Cuenta receptora
     subject: string;
     body: string;
     receivedAt: string;
-    status: 'NEW' | 'READ' | 'ARCHIVED';
+    status: 'NEW' | 'READ' | 'ARCHIVED' | 'PENDING' | 'DONE';
     attachments?: Attachment[];
 }
 
@@ -31,6 +32,12 @@ const MailPage = () => {
     const [isSending, setIsSending] = useState(false);
     const [showMobileDetail, setShowMobileDetail] = useState(false);
     const [previewingPdf, setPreviewingPdf] = useState<string | null>(null);
+    const [filterAccount, setFilterAccount] = useState<string>('all');
+    const [showCompose, setShowCompose] = useState(false);
+    const [senderAccount, setSenderAccount] = useState('ventas@ciaestrumetal.com');
+    const [composeTo, setComposeTo] = useState('');
+    const [composeSubject, setComposeSubject] = useState('');
+    const [composeBody, setComposeBody] = useState('');
 
     useEffect(() => {
         const q = query(collection(db, 'incoming_messages'), orderBy('receivedAt', 'desc'));
@@ -112,6 +119,12 @@ const MailPage = () => {
         }
     };
 
+    const filteredMessages = messages.filter(m =>
+        filterAccount === 'all' || m.to === filterAccount
+    );
+
+    const accounts = Array.from(new Set(messages.map(m => m.to))).filter(Boolean);
+
     return (
         <div className="h-full flex flex-col gap-6">
             {/* Header */}
@@ -121,6 +134,13 @@ const MailPage = () => {
                     <p className="text-slate-400 text-sm mt-1 font-medium uppercase tracking-widest leading-none">Bandeja de Entrada @ciaestrumetal.com</p>
                 </div>
                 <div className="flex gap-4">
+                    <button
+                        onClick={() => setShowCompose(true)}
+                        className="bg-green-700 hover:bg-green-600 text-white px-6 py-2.5 rounded-xl flex items-center gap-2 shadow-lg shadow-green-900/20 transition-all font-black text-[10px] uppercase tracking-wider"
+                    >
+                        <X size={16} className="rotate-45" />
+                        Redactar Nuevo
+                    </button>
                     <div className="bg-green-50 px-4 py-2 rounded-xl border border-green-100 flex items-center gap-2">
                         <ShieldCheck size={18} className="text-green-600" />
                         <span className="text-[10px] font-black text-green-700 uppercase tracking-tighter">Microservicio Activo</span>
@@ -132,12 +152,27 @@ const MailPage = () => {
             <div className="flex-1 flex gap-6 overflow-hidden min-h-0">
                 {/* Inbox List */}
                 <div className={`transition-all duration-500 bg-white border border-slate-100 rounded-2xl shadow-sm flex flex-col overflow-hidden ${showMobileDetail ? 'hidden md:flex' : 'flex'} ${selectedMessage ? 'md:w-20 lg:w-80' : 'md:w-1/3'}`}>
-                    <div className={`p-4 border-b border-slate-50 flex items-center gap-3 bg-slate-50/50 transition-all ${selectedMessage ? 'md:justify-center lg:justify-start' : ''}`}>
-                        <Inbox size={18} className="text-slate-400" />
-                        <span className={`text-xs font-black uppercase text-slate-600 ${selectedMessage ? 'md:hidden lg:inline' : ''}`}>Mensajes Recientes</span>
-                        <span className={`ml-auto bg-green-600 text-white px-2 py-0.5 rounded-full text-[9px] font-black ${selectedMessage ? 'md:hidden lg:inline' : ''}`}>
-                            {messages.filter(m => m.status === 'NEW').length}
-                        </span>
+                    <div className={`p-4 border-b border-slate-50 flex flex-col gap-3 bg-slate-50/50 transition-all ${selectedMessage ? 'md:p-2' : ''}`}>
+                        <div className={`flex items-center gap-3 ${selectedMessage ? 'md:justify-center lg:justify-start' : ''}`}>
+                            <Inbox size={18} className="text-slate-400" />
+                            <span className={`text-xs font-black uppercase text-slate-600 ${selectedMessage ? 'md:hidden lg:inline' : ''}`}>Recibidos</span>
+                            <span className={`ml-auto bg-green-600 text-white px-2 py-0.5 rounded-full text-[9px] font-black ${selectedMessage ? 'md:hidden lg:inline' : ''}`}>
+                                {filteredMessages.filter(m => m.status === 'NEW').length}
+                            </span>
+                        </div>
+
+                        {!selectedMessage && (
+                            <select
+                                value={filterAccount}
+                                onChange={(e) => setFilterAccount(e.target.value)}
+                                className="w-full bg-white border border-slate-200 rounded-lg p-2 text-[10px] font-bold uppercase tracking-tight outline-none focus:ring-2 focus:ring-green-500/20"
+                            >
+                                <option value="all">Todas las cuentas</option>
+                                {accounts.map(acc => (
+                                    <option key={acc} value={acc}>{acc}</option>
+                                ))}
+                            </select>
+                        )}
                     </div>
 
                     <div className="flex-1 overflow-y-auto no-scrollbar">
@@ -152,7 +187,7 @@ const MailPage = () => {
                                 <p className="text-[10px] font-bold uppercase">Sin mensajes nuevos</p>
                             </div>
                         ) : (
-                            messages.map(msg => (
+                            filteredMessages.map(msg => (
                                 <button
                                     key={msg.id}
                                     onClick={() => {
@@ -161,19 +196,23 @@ const MailPage = () => {
                                         setShowMobileDetail(true);
                                         setPreviewingPdf(null);
                                     }}
-                                    className={`w-full text-left p-4 border-b border-slate-50 transition-all hover:bg-slate-50 flex flex-col gap-1 ${selectedMessage?.id === msg.id ? 'bg-green-50/50 border-l-4 border-l-green-600' : ''} ${selectedMessage ? 'md:items-center lg:items-start' : ''}`}
+                                    className={`w-full text-left p-4 border-b border-slate-50 transition-all hover:bg-slate-50 flex flex-col gap-1 ${selectedMessage?.id === msg.id ? 'bg-green-50/50 border-l-4 border-l-green-600 shadow-sm' : ''} ${selectedMessage ? 'md:items-center lg:items-start' : ''}`}
                                 >
-                                    <div className="flex justify-between items-center w-full">
+                                    <div className="flex justify-between items-center w-full gap-2">
                                         <div className="flex items-center gap-1 min-w-0">
+                                            {msg.to && !selectedMessage && (
+                                                <span className="shrink-0 bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded text-[7px] font-black uppercase tracking-tighter">
+                                                    {msg.to.split('@')[0]}
+                                                </span>
+                                            )}
                                             <span className={`text-[10px] font-black uppercase tracking-tight truncate ${msg.status === 'NEW' ? 'text-green-700' : 'text-slate-400'} ${selectedMessage ? 'md:hidden lg:inline-block' : ''}`}>
                                                 {msg.from.split('<')[0] || msg.from}
                                             </span>
                                             {selectedMessage && (
-                                                <div className="md:w-8 md:h-8 lg:hidden bg-slate-100 rounded-full flex items-center justify-center text-[10px] font-bold text-slate-400">
+                                                <div className="md:w-8 md:h-8 lg:hidden bg-slate-100 rounded-full flex items-center justify-center text-[10px] font-bold text-slate-400 border border-slate-200">
                                                     {(msg.from.split('<')[0] || msg.from).charAt(0).toUpperCase()}
                                                 </div>
                                             )}
-                                            {msg.attachments && msg.attachments.length > 0 && <Paperclip size={10} className={`text-slate-300 ${selectedMessage ? 'md:hidden lg:inline' : ''}`} />}
                                         </div>
                                         <span className={`text-[9px] text-slate-300 font-mono ${selectedMessage ? 'md:hidden lg:inline' : ''}`}>
                                             {new Date(msg.receivedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -182,9 +221,12 @@ const MailPage = () => {
                                     <h4 className={`text-xs truncate font-bold w-full ${msg.status === 'NEW' ? 'text-slate-800' : 'text-slate-500'} ${selectedMessage ? 'md:hidden lg:inline' : ''}`}>
                                         {msg.subject || '(Sin Asunto)'}
                                     </h4>
-                                    <p className={`text-[10px] text-slate-400 line-clamp-1 italic ${selectedMessage ? 'md:hidden lg:inline' : ''}`}>
-                                        {msg.body.substring(0, 60)}...
-                                    </p>
+                                    <div className={`flex items-center gap-2 ${selectedMessage ? 'md:hidden lg:flex' : 'flex'}`}>
+                                        <p className="text-[10px] text-slate-400 line-clamp-1 italic flex-1">
+                                            {msg.body.substring(0, 60)}...
+                                        </p>
+                                        {msg.attachments && msg.attachments.length > 0 && <Paperclip size={10} className="text-slate-300 shrink-0" />}
+                                    </div>
                                 </button>
                             ))
                         )}
@@ -209,7 +251,10 @@ const MailPage = () => {
                                     </div>
                                     <div className="min-w-0 flex-1">
                                         <h2 className="text-sm md:text-lg font-black text-slate-800 leading-none truncate">{selectedMessage.subject}</h2>
-                                        <p className="text-[10px] md:text-xs text-slate-400 mt-1 font-medium truncate">{selectedMessage.from}</p>
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <p className="text-[10px] md:text-xs text-slate-400 font-medium truncate">{selectedMessage.from}</p>
+                                            <span className="text-[8px] bg-slate-100 text-slate-500 px-1 rounded font-black uppercase">para {selectedMessage.to}</span>
+                                        </div>
                                     </div>
                                 </div>
                                 <div className="flex gap-2">
@@ -266,29 +311,52 @@ const MailPage = () => {
                                     </div>
                                 )}
 
-                                {/* PDF Previewer */}
+                                {/* PDF Lightbox Modal */}
                                 {previewingPdf && (
-                                    <div className="mt-6 border border-slate-100 rounded-2xl overflow-hidden shadow-xl bg-slate-50 h-[600px] relative">
-                                        <div className="absolute top-2 right-2 z-10">
-                                            <button
-                                                onClick={() => setPreviewingPdf(null)}
-                                                className="bg-white/80 hover:bg-white p-2 rounded-full shadow-md text-slate-600 transition-all"
-                                            >
-                                                <X size={16} />
-                                            </button>
-                                        </div>
-                                        <iframe
-                                            src={previewingPdf}
-                                            className="w-full h-full border-none"
-                                            title="PDF Preview"
+                                    <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 md:p-10">
+                                        <div
+                                            className="absolute inset-0 bg-slate-950/60 backdrop-blur-md"
+                                            onClick={() => setPreviewingPdf(null)}
                                         />
+                                        <div className="relative w-full max-w-5xl h-full bg-white rounded-[40px] shadow-2xl overflow-hidden flex flex-col border border-white/20">
+                                            <div className="p-4 border-b border-slate-50 flex justify-between items-center bg-white/80 backdrop-blur-xl">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 bg-red-50 text-red-500 rounded-lg flex items-center justify-center font-black text-[10px]">PDF</div>
+                                                    <span className="text-xs font-black uppercase text-slate-700 tracking-tight">Visor de Documentos Estrumetal</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <a href={previewingPdf} download className="p-2 text-slate-400 hover:text-green-600 transition-all"><Download size={20} /></a>
+                                                    <button
+                                                        onClick={() => setPreviewingPdf(null)}
+                                                        className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full transition-all"
+                                                    >
+                                                        <X size={20} />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <iframe
+                                                src={previewingPdf}
+                                                className="w-full flex-1 border-none"
+                                                title="PDF Preview"
+                                            />
+                                        </div>
                                     </div>
                                 )}
 
                                 <div className="mt-8 md:mt-12 pt-6 md:pt-8 border-t border-slate-50 flex flex-col gap-4">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <ArrowRight size={14} className="text-green-600 md:w-4 md:h-4 w-3 h-3" />
-                                        <span className="text-[9px] md:text-[10px] font-black uppercase text-slate-800">Responder como @ciaestrumetal.com</span>
+                                    <div className="flex items-center justify-between mb-2">
+                                        <div className="flex items-center gap-2">
+                                            <ArrowRight size={14} className="text-green-600" />
+                                            <span className="text-[9px] md:text-[10px] font-black uppercase text-slate-800">Responder como</span>
+                                            <select
+                                                value={senderAccount}
+                                                onChange={(e) => setSenderAccount(e.target.value)}
+                                                className="bg-slate-100 border-none rounded-lg px-2 py-1 text-[9px] font-black text-green-700 outline-none"
+                                            >
+                                                <option value="ventas@ciaestrumetal.com">ventas@ciaestrumetal.com</option>
+                                                <option value="info@ciaestrumetal.com">info@ciaestrumetal.com</option>
+                                            </select>
+                                        </div>
                                     </div>
                                     <textarea
                                         value={replyText}
@@ -316,6 +384,128 @@ const MailPage = () => {
                     )}
                 </div>
             </div>
+
+            {/* Compose Modal */}
+            {showCompose && (
+                <div className="fixed inset-0 z-[2100] flex items-center justify-center p-4">
+                    <div
+                        className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm"
+                        onClick={() => setShowCompose(false)}
+                    />
+                    <div className="relative w-full max-w-2xl bg-white rounded-[32px] shadow-2xl overflow-hidden flex flex-col border border-slate-100 flex-1 h-[600px]">
+                        <div className="p-6 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-green-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-green-200">
+                                    <Send size={20} />
+                                </div>
+                                <div>
+                                    <h3 className="text-sm font-black uppercase text-slate-800 tracking-tight">Nuevo Mensaje Comercial</h3>
+                                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">@ciaestrumetal.com</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setShowCompose(false)}
+                                className="p-2 hover:bg-slate-100 text-slate-400 rounded-full transition-all"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <div className="p-6 flex flex-col gap-4 overflow-y-auto">
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Desde</label>
+                                <select
+                                    value={senderAccount}
+                                    onChange={(e) => setSenderAccount(e.target.value)}
+                                    className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-green-500/10 transition-all"
+                                >
+                                    <option value="ventas@ciaestrumetal.com">ventas@ciaestrumetal.com</option>
+                                    <option value="info@ciaestrumetal.com">info@ciaestrumetal.com</option>
+                                </select>
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Para (Cliente)</label>
+                                <input
+                                    type="email"
+                                    placeholder="ejemplo@cliente.com"
+                                    value={composeTo}
+                                    onChange={(e) => setComposeTo(e.target.value)}
+                                    className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-green-500/10 transition-all placeholder:text-slate-300"
+                                />
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Asunto</label>
+                                <input
+                                    type="text"
+                                    placeholder="COTIZACIÓN ESTRUMETAL - ORD-XXXX"
+                                    value={composeSubject}
+                                    onChange={(e) => setComposeSubject(e.target.value)}
+                                    className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-xs font-black uppercase tracking-tight text-slate-800 outline-none focus:ring-2 focus:ring-green-500/10 transition-all placeholder:text-slate-200"
+                                />
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Mensaje</label>
+                                <textarea
+                                    rows={8}
+                                    placeholder="Escribe el cuerpo del correo aquí..."
+                                    value={composeBody}
+                                    onChange={(e) => setComposeBody(e.target.value)}
+                                    className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-xs font-medium text-slate-600 outline-none focus:ring-2 focus:ring-green-500/10 transition-all resize-none"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="p-6 border-t border-slate-50 bg-slate-50/30 flex justify-end gap-3">
+                            <button
+                                onClick={() => setShowCompose(false)}
+                                className="px-6 py-3 text-[10px] font-black uppercase text-slate-400 hover:text-slate-600 transition-all"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={async () => {
+                                    if (!composeTo || !composeSubject || !composeBody) {
+                                        alert('Por favor completa todos los campos');
+                                        return;
+                                    }
+                                    setIsSending(true);
+                                    try {
+                                        const response = await fetch('/api/mail/send', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({
+                                                to: composeTo,
+                                                subject: composeSubject,
+                                                body: composeBody,
+                                                fromName: senderAccount.split('@')[0].toUpperCase(),
+                                                fromEmail: senderAccount
+                                            })
+                                        });
+                                        if (response.ok) {
+                                            alert('Mensaje enviado');
+                                            setShowCompose(false);
+                                            setComposeTo('');
+                                            setComposeSubject('');
+                                            setComposeBody('');
+                                        } else {
+                                            alert('Error al enviar');
+                                        }
+                                    } catch (e) { alert('Error crítico'); }
+                                    finally { setIsSending(false); }
+                                }}
+                                disabled={isSending}
+                                className="bg-green-700 hover:bg-green-600 text-white px-8 py-3 rounded-2xl flex items-center gap-2 shadow-xl shadow-green-900/10 transition-all font-black text-[10px] uppercase tracking-widest disabled:opacity-50"
+                            >
+                                {isSending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                                Enviar Mensaje
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
