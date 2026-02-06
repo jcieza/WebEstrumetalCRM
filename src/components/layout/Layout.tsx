@@ -46,7 +46,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
 
     const phoneNavItems = [
         { id: 'dashboard', label: 'Inicio', icon: Home, color: '#42A5F5' },
-        { id: 'production', label: 'OP', icon: Factory, color: '#66BB6A' },
+        { id: 'production', label: 'Producción', icon: Factory, color: '#66BB6A' },
+        { id: 'emails', label: 'Correos', icon: Mail, color: '#10B981', priority: true }, // PRIORIDAD CENTRAL
         { id: 'clients', label: 'Clientes', icon: Users, color: '#AB47BC' },
         { id: 'inventory', label: 'Stock', icon: Package, color: '#FF7043' },
         { id: 'quotations', label: 'Cotiz.', icon: FileText, color: '#26A69A' },
@@ -54,8 +55,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
         { id: 'cash-receipts', label: 'Caja', icon: DollarSign, color: '#EF5350' },
         { id: 'purchases', label: 'Compras', icon: ShoppingCart, color: '#8D6E63' },
         { id: 'reports', label: 'Reportes', icon: BarChart3, color: '#00ACC1' },
-        { id: 'messages', label: 'Chat', icon: Home, color: '#42A5F5' }, // WhatsApp uses Home icon often or MessageSquare
-        { id: 'emails', label: 'Mail', icon: Mail, color: '#10B981' },
         { id: 'settings', label: 'Ajustes', icon: SettingsIcon, color: '#78909C' },
     ];
 
@@ -129,7 +128,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
                                 </button>
 
                                 <div className="grid grid-cols-5 gap-1 p-2 flex-grow">
-                                    {phoneNavItems.slice(0, 10).map(item => {
+                                    {[...phoneNavItems.slice(0, 2), phoneNavItems.find(i => i.id === 'emails'), ...phoneNavItems.slice(3, 5)].map(item => {
+                                        if (!item) return null;
                                         const Icon = item.icon;
                                         const isActive = activeTab === item.id;
                                         if (isMenuHidden && !isActive) return null;

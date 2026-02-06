@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import {
     signInWithPopup,
+    signInWithEmailAndPassword,
     signOut,
     onAuthStateChanged,
     User,
@@ -16,6 +17,7 @@ interface AuthContextType {
     loading: boolean;
     authorized: boolean;
     login: () => Promise<void>;
+    loginWithEmail: (email: string, pass: string) => Promise<void>;
     logout: () => Promise<void>;
 }
 
@@ -71,6 +73,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     };
 
+    const loginWithEmail = async (email: string, pass: string) => {
+        try {
+            await signInWithEmailAndPassword(auth, email, pass);
+        } catch (error) {
+            console.error("Email Login Error:", error);
+            throw error;
+        }
+    };
+
     const logout = async () => {
         try {
             await signOut(auth);
@@ -80,7 +91,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     return (
-        <AuthContext.Provider value={{ user, loading, authorized, login, logout }}>
+        <AuthContext.Provider value={{ user, loading, authorized, login, loginWithEmail, logout }}>
             {children}
         </AuthContext.Provider>
     );
