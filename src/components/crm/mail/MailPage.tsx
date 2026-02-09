@@ -49,8 +49,35 @@ const ESTRUMETAL_SIGNATURE = `
 // - [x] Update: Signature text to "Despacho de Oficina"
 // - [/] Comprehensive Overhaul: Fix structures (In Progress), HTML rendering, Multiple Recipients, Unread Counter, and Redesign Compose Modal.
 //     - [x] Phase 1: Logic Consolidation (Completed)
-//     - [/] Phase 2: Structural Unification (In Progress)
-//     - [ ] Phase 3: Feature Polish (Pending)
+//     - [x] Phase 2: Structural Unification (Completed)
+//     - [/] Phase 3: Feature Polish - Mobile Redesign (In Progress)
+
+const GMAIL_THEME = {
+    dark: {
+        bg: '#1A1C1E',
+        surface: '#212429',
+        surfaceVariant: '#2D2F33',
+        textPrimary: '#E2E2E6',
+        textSecondary: '#C4C6D0',
+        textMuted: '#8E9199',
+        accent: '#D3E3FD',
+        onAccent: '#041E49',
+        accentBlue: '#7CACEA',
+        selection: 'rgba(211, 227, 253, 0.08)'
+    },
+    light: {
+        bg: '#F6F8FC',
+        surface: '#FFFFFF',
+        surfaceVariant: '#EAF1FB',
+        textPrimary: '#1F1F1F',
+        textSecondary: '#444746',
+        textMuted: '#707070',
+        accent: '#0B57D0',
+        onAccent: '#FFFFFF',
+        accentBlue: '#0B57D0',
+        selection: '#E2E7FF'
+    }
+};
 
 const MailPage = () => {
     const { updateProfile } = useAuth();
@@ -166,6 +193,68 @@ const MailPage = () => {
         document.title = unreadCount > 0 ? `(${unreadCount}) Correos - Estrumetal` : 'Comunicaciones - Estrumetal';
         return () => { document.title = 'Estrumetal App'; };
     }, [messages]);
+
+    // Isolated Email Viewer Component
+    const EmailBodyViewer = ({ html, theme }: { html: string; theme: 'light' | 'dark' }) => {
+        const iframeRef = React.useRef<HTMLIFrameElement>(null);
+
+        const adjustHeight = () => {
+            if (iframeRef.current && iframeRef.current.contentWindow) {
+                const body = iframeRef.current.contentWindow.document.body;
+                const html = iframeRef.current.contentWindow.document.documentElement;
+                const height = Math.max(
+                    body.scrollHeight, body.offsetHeight,
+                    html.clientHeight, html.scrollHeight, html.offsetHeight
+                );
+                iframeRef.current.style.height = `${height + 40}px`;
+            }
+        };
+
+        useEffect(() => {
+            const iframe = iframeRef.current;
+            if (!iframe) return;
+
+            // Inyectar el HTML con estilos base para asegurar legibilidad si el mail no trae estilos
+            const baseStyles = `
+                <style>
+                    body { 
+                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                        line-height: 1.6;
+                        color: ${theme === 'dark' ? '#cbd5e1' : '#334155'};
+                        margin: 0;
+                        padding: 0;
+                    }
+                    img { max-width: 100%; height: auto; display: block; }
+                    a { color: #16a34a; }
+                    /* Prevenir scrollbars internos duplicados */
+                    html, body { overflow: hidden; }
+                </style>
+            `;
+
+            iframe.srcdoc = `${baseStyles}${html}`;
+
+            // Ajustar altura inicial y en cada carga
+            iframe.onload = adjustHeight;
+
+            // Resize observer para emails dinámicos
+            const observer = new ResizeObserver(adjustHeight);
+            if (iframe.contentWindow?.document.body) {
+                observer.observe(iframe.contentWindow.document.body);
+            }
+
+            return () => observer.disconnect();
+        }, [html, theme]);
+
+        return (
+            <iframe
+                ref={iframeRef}
+                title="Email Content"
+                className="w-full border-none transition-all duration-300 pointer-events-auto"
+                sandbox="allow-popups allow-popups-to-escape-sandbox allow-scripts allow-same-origin"
+                loading="lazy"
+            />
+        );
+    };
 
     // Core Actions
     const markAsRead = async (id: string) => {
@@ -518,7 +607,9 @@ const MailPage = () => {
                                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">PARA: {selectedMessage.to}</p>
                                     </div>
                                 </div>
-                                <div className="prose prose-slate max-w-none text-slate-700 leading-relaxed text-base" dangerouslySetInnerHTML={{ __html: selectedMessage.body }} />
+                                <div className={`prose prose-slate max-w-none text-slate-700 leading-relaxed text-base ${theme === 'dark' ? 'prose-invert' : ''}`}>
+                                    <EmailBodyViewer html={selectedMessage.body} theme={theme} />
+                                </div>
                                 {selectedMessage.attachments && selectedMessage.attachments.length > 0 && (
                                     <div className="mt-12 flex flex-wrap gap-4">
                                         {selectedMessage.attachments.map((att, i) => (
@@ -556,155 +647,277 @@ const MailPage = () => {
         </div>
     );
 
-    const renderModernLayout = () => (
-        <div className={`fixed inset-0 flex flex-col ${theme === 'dark' ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
-            {/* Header Modern */}
-            <div className={`h-16 border-b flex items-center justify-between px-6 shrink-0 ${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
-                <div className="flex items-center gap-6">
-                    <button className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-all">
-                        <Menu size={20} className="text-slate-400" />
-                    </button>
-                    <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center text-white font-black text-sm shadow-md">E</div>
-                        <span className="text-lg font-bold tracking-tight">Estrumetal <span className="text-green-600">Mail</span></span>
-                    </div>
-                </div>
-                <div className="flex-1 max-w-2xl px-12">
-                    <div className="relative group">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-green-600 transition-colors" size={18} />
-                        <input
-                            type="text"
-                            placeholder="Buscar en el correo..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className={`w-full border rounded-xl py-2.5 pl-12 pr-6 text-sm outline-none transition-all ${theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white focus:bg-slate-900 focus:border-green-600' : 'bg-slate-100 border-transparent focus:bg-white focus:border-slate-200 focus:shadow-sm'}`}
-                        />
-                    </div>
-                </div>
-                <div className="flex items-center gap-3">
-                    <button onClick={() => setLayoutMode('glass')} className={`p-2 rounded-lg text-slate-400 hover:text-green-600 transition-all ${theme === 'dark' ? 'hover:bg-slate-800' : 'hover:bg-slate-100'}`}>
-                        <Layout size={20} />
-                    </button>
-                    <div className="w-px h-6 bg-slate-200 dark:bg-slate-800 mx-2" />
-                    <button onClick={() => setShowSubSettings(true)} className={`p-1.5 rounded-full border border-transparent hover:border-slate-200 transition-all ${theme === 'dark' ? 'hover:bg-slate-800' : 'hover:bg-slate-100'}`}>
-                        {userProfile.photoURL ? <img src={userProfile.photoURL} alt="User" className="w-8 h-8 rounded-full object-cover" /> : <div className="w-8 h-8 bg-slate-200 dark:bg-slate-700 rounded-full flex items-center justify-center text-xs font-bold">{userProfile.displayName?.charAt(0) || 'U'}</div>}
-                    </button>
-                </div>
-            </div>
+    const renderModernLayout = () => {
+        const colors = theme === 'dark' ? GMAIL_THEME.dark : GMAIL_THEME.light;
 
-            <div className="flex-1 flex overflow-hidden">
-                {/* Sidebar Modern */}
-                <div className={`w-64 flex flex-col py-4 shrink-0 overflow-y-auto no-scrollbar ${theme === 'dark' ? 'bg-slate-900' : 'bg-white'}`}>
-                    <div className="px-4 mb-4">
+        return (
+            <div
+                className={`fixed inset-0 flex flex-col transition-colors duration-300`}
+                style={{ backgroundColor: colors.bg, color: colors.textPrimary, fontFamily: 'Roboto, sans-serif' }}
+            >
+                {/* Header Modern - Rediseñado para Mobile */}
+                <div
+                    className={`h-14 md:h-16 flex items-center justify-between px-4 md:px-6 shrink-0 z-50`}
+                    style={{ borderBottom: `1px solid ${theme === 'dark' ? '#2D2F33' : '#E0E0E0'}` }}
+                >
+                    <div className="flex items-center gap-3 md:gap-6">
                         <button
-                            onClick={() => { setComposeTo(''); setComposeSubject(''); setComposeBody(''); setComposeFiles([]); setShowCompose(true); }}
-                            className="bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 px-6 py-4 rounded-2xl flex items-center gap-4 hover:shadow-lg transition-all font-bold text-sm shadow-sm border border-green-200 dark:border-green-800 w-full"
+                            onClick={() => setShowMobileSidebar(!showMobileSidebar)}
+                            className="p-2 hover:bg-white/10 rounded-full transition-all"
                         >
-                            <Plus size={20} /> Redactar
+                            <Menu size={22} style={{ color: colors.textSecondary }} />
+                        </button>
+                        <div className="hidden md:flex items-center gap-2">
+                            <div className="w-8 h-8 bg-[#0B57D0] rounded-lg flex items-center justify-center text-white font-black text-sm shadow-md">E</div>
+                            <span className="text-lg font-bold tracking-tight">Estrumetal <span className="text-[#0B57D0]">Mail</span></span>
+                        </div>
+                    </div>
+
+                    {/* Search Bar - Gmail Style 28px Radius */}
+                    <div className="flex-1 max-w-2xl px-2 md:px-12">
+                        <div
+                            className="relative group flex items-center px-4 py-2 md:py-3 transition-all cursor-text shadow-sm"
+                            style={{
+                                borderRadius: '28px',
+                                backgroundColor: theme === 'dark' ? colors.surfaceVariant : colors.surfaceVariant
+                            }}
+                        >
+                            <Search className="text-slate-400 group-focus-within:text-green-600 transition-colors mr-3" size={20} />
+                            <input
+                                type="text"
+                                placeholder="Buscar en el correo..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full bg-transparent border-none outline-none text-sm md:text-base font-normal placeholder:text-slate-500"
+                                style={{ color: colors.textPrimary }}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 md:gap-3">
+                        <button
+                            onClick={() => setLayoutMode('glass')}
+                            className="hidden md:flex p-2 rounded-xl text-slate-400 hover:text-green-600 transition-all hover:bg-white/5"
+                        >
+                            <Layout size={20} />
+                        </button>
+                        <button
+                            onClick={() => setShowSubSettings(true)}
+                            className="p-1 rounded-full border-2 border-transparent hover:border-slate-300 transition-all shrink-0"
+                        >
+                            {userProfile.photoURL ? (
+                                <img src={userProfile.photoURL} alt="User" className="w-8 h-8 md:w-9 md:h-9 rounded-full object-cover" />
+                            ) : (
+                                <div className="w-8 h-8 md:w-9 md:h-9 bg-green-700 rounded-full flex items-center justify-center text-xs text-white font-bold">
+                                    {userProfile.displayName?.charAt(0) || 'U'}
+                                </div>
+                            )}
                         </button>
                     </div>
-
-                    {[
-                        { id: 'inbox', label: 'Recibidos', icon: Inbox },
-                        { id: 'sent', label: 'Enviados', icon: Send },
-                        { id: 'drafts', label: 'Borradores', icon: Clock },
-                        { id: 'archived', label: 'Archivados', icon: Archive },
-                        { id: 'trash', label: 'Papelera', icon: Trash2 },
-                    ].map(folder => {
-                        const isActive = currentFolder === folder.id;
-                        const unreadCount = folder.id === 'inbox' ? messages.filter(m => m.status === 'NEW').length : 0;
-                        return (
-                            <button
-                                key={folder.id}
-                                onClick={() => setCurrentFolder(folder.id as any)}
-                                className={`flex items-center gap-4 px-6 py-2.5 mx-2 rounded-r-full text-sm transition-all ${isActive ? 'bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-400 font-bold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-                            >
-                                <folder.icon size={18} className={isActive ? 'text-green-600' : 'text-slate-400'} />
-                                <span className="flex-1 text-left">{folder.label}</span>
-                                {unreadCount > 0 && <span className="text-[10px] bg-red-500 text-white px-2 py-0.5 rounded-full font-black">{unreadCount}</span>}
-                            </button>
-                        );
-                    })}
                 </div>
 
-                {/* List Area Modern */}
-                <div className={`flex-1 flex flex-col min-w-0 border-l ${theme === 'dark' ? 'bg-slate-950 border-slate-800' : 'bg-white border-slate-100'}`}>
-                    {/* List Header */}
-                    <div className={`h-12 border-b flex items-center px-4 gap-4 ${theme === 'dark' ? 'border-slate-800' : 'border-slate-50'}`}>
-                        <button className="p-1 text-slate-400 hover:text-slate-600"><SettingsIcon size={16} /></button>
-                        <div className="w-px h-4 bg-slate-200 dark:bg-slate-800" />
-                        <span className="text-[10px] font-bold uppercase text-slate-400 tracking-widest">{currentFolder}</span>
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto no-scrollbar">
-                        {filteredMessages.map(msg => (
+                <div className="flex-1 flex overflow-hidden relative">
+                    {/* Sidebar Modern / Mobile Drawer */}
+                    <div
+                        className={`fixed md:relative inset-y-0 left-0 w-72 md:w-64 z-[60] flex flex-col py-4 shrink-0 transition-transform duration-300 ease-in-out ${showMobileSidebar ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
+                        style={{ backgroundColor: colors.bg }}
+                    >
+                        <div className="px-4 mb-6 hidden md:block">
                             <button
-                                key={msg.id}
-                                onClick={() => { setSelectedMessage(msg); if (msg.status === 'NEW') markAsRead(msg.id); }}
-                                className={`w-full flex items-center px-4 py-2 border-b group transition-colors ${selectedMessage?.id === msg.id ? 'bg-green-50/50 dark:bg-green-900/10' : 'bg-white dark:bg-slate-950 hover:bg-slate-50 dark:hover:bg-slate-900'} ${theme === 'dark' ? 'border-slate-800' : 'border-slate-50'}`}
+                                onClick={() => { setComposeTo(''); setComposeSubject(''); setComposeBody(''); setComposeFiles([]); setShowCompose(true); }}
+                                className="bg-[#C2E7FF] text-[#001D35] px-6 py-4 rounded-2xl flex items-center gap-4 hover:shadow-lg transition-all font-bold text-sm shadow-sm w-full"
                             >
-                                <div className="flex items-center gap-4 w-full min-w-0">
-                                    <div className="shrink-0 flex items-center gap-2">
-                                        <button className="w-5 h-5 flex items-center justify-center text-slate-300 hover:text-yellow-400 transition-colors"><Star size={16} /></button>
-                                        <div className={`w-4 h-4 rounded border-2 ${msg.status === 'NEW' ? 'border-green-600 bg-green-600' : 'border-slate-200 dark:border-slate-700'}`} />
-                                    </div>
-                                    <span className={`w-40 shrink-0 text-sm truncate ${msg.status === 'NEW' ? 'font-black' : 'font-medium'}`}>{msg.from.split('<')[0].trim() || msg.from}</span>
-                                    <div className="flex-1 min-w-0 flex items-baseline gap-2">
-                                        <span className={`text-sm truncate ${msg.status === 'NEW' ? 'font-bold' : 'font-medium opacity-60'}`}>{msg.subject}</span>
-                                        <span className="text-sm text-slate-400 truncate font-medium">- {msg.body.replace(/<[^>]*>?/gm, '').substring(0, 100)}</span>
-                                    </div>
-                                    <span className="shrink-0 text-[10px] font-bold text-slate-400 uppercase">{new Date(msg.receivedAt).toLocaleDateString()}</span>
-                                </div>
+                                <Plus size={20} /> Redactar
                             </button>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Detail Area Modern (If selected and screen is large) */}
-                {selectedMessage && (
-                    <div className={`w-[500px] xl:w-[650px] border-l flex flex-col overflow-hidden ${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
-                        <div className="p-6 border-b flex justify-between items-center bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm">
-                            <h2 className="text-lg font-black uppercase line-clamp-1">{selectedMessage.subject}</h2>
-                            <div className="flex gap-1">
-                                <button onClick={() => setIsMaximized(true)} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg text-slate-500 transition-all"><Eye size={18} /></button>
-                                <button onClick={() => handleDelete(selectedMessage)} className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-slate-500 hover:text-red-500 transition-all"><Trash2 size={18} /></button>
-                                <button onClick={() => setSelectedMessage(null)} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg text-slate-500 transition-all"><X size={18} /></button>
-                            </div>
                         </div>
-                        <div className="flex-1 overflow-y-auto p-8 no-scrollbar">
-                            <div className="flex items-center gap-4 mb-8">
-                                <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center font-black text-sm">{selectedMessage.from.charAt(0)}</div>
-                                <div className="min-w-0">
-                                    <p className="text-sm font-bold truncate">{selectedMessage.from}</p>
-                                    <p className="text-[10px] text-slate-500 font-medium">Para: {selectedMessage.to} • {new Date(selectedMessage.receivedAt).toLocaleString()}</p>
-                                </div>
-                            </div>
-                            <div className="prose prose-sm dark:prose-invert max-w-none text-slate-700 dark:text-slate-300 leading-relaxed" dangerouslySetInnerHTML={{ __html: selectedMessage.body }} />
-                            {selectedMessage.attachments && selectedMessage.attachments.length > 0 && (
-                                <div className="mt-8 flex flex-wrap gap-3">
-                                    {selectedMessage.attachments.map((att, i) => (
-                                        <div key={i} className="flex items-center gap-2 p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm group">
-                                            <Paperclip size={14} className="text-green-600" />
-                                            <div className="min-w-0 max-w-[120px]">
-                                                <p className="text-[10px] font-bold truncate uppercase">{att.filename}</p>
-                                                <p className="text-[8px] font-medium text-slate-400">{(att.size / 1024).toFixed(1)} KB</p>
+
+                        {[
+                            { id: 'inbox', label: 'Recibidos', icon: Inbox },
+                            { id: 'sent', label: 'Enviados', icon: Send },
+                            { id: 'drafts', label: 'Borradores', icon: Clock },
+                            { id: 'archived', label: 'Archivados', icon: Archive },
+                            { id: 'trash', label: 'Papelera', icon: Trash2 },
+                        ].map(folder => {
+                            const isActive = currentFolder === folder.id;
+                            const unreadCount = folder.id === 'inbox' ? messages.filter(m => m.status === 'NEW').length : 0;
+                            return (
+                                <button
+                                    key={folder.id}
+                                    onClick={() => { setCurrentFolder(folder.id as any); setShowMobileSidebar(false); }}
+                                    className={`flex items-center gap-4 px-6 py-3.5 mx-2 rounded-full text-sm transition-all group ${isActive ? 'bg-[#C2E7FF] text-[#001D35] font-bold shadow-sm' : 'hover:bg-white/5'}`}
+                                    style={{ color: isActive ? '#001D35' : colors.textSecondary }}
+                                >
+                                    <folder.icon size={20} className={isActive ? 'text-[#001D35]' : colors.textSecondary} />
+                                    <span className="flex-1 text-left uppercase text-[11px] font-black tracking-widest">{folder.label}</span>
+                                    {unreadCount > 0 && (
+                                        <span className="text-[10px] bg-[#0B57D0] text-white px-2.5 py-0.5 rounded-full font-black">
+                                            {unreadCount}
+                                        </span>
+                                    )}
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    {/* Overlay for Mobile Sidebar */}
+                    {showMobileSidebar && (
+                        <div
+                            className="md:hidden fixed inset-0 bg-black/60 z-[55] backdrop-blur-sm"
+                            onClick={() => setShowMobileSidebar(false)}
+                        />
+                    )}
+
+                    {/* List Area Modern */}
+                    <div
+                        className={`flex-1 flex flex-col min-w-0 transition-opacity duration-300 ${showMobileDetail ? 'opacity-0 md:opacity-100' : 'opacity-100'}`}
+                    >
+                        <div className="flex-1 overflow-y-auto no-scrollbar">
+                            {filteredMessages.length > 0 ? filteredMessages.map(msg => {
+                                const isUnread = msg.status === 'NEW';
+                                return (
+                                    <button
+                                        key={msg.id}
+                                        onClick={() => {
+                                            setSelectedMessage(msg);
+                                            if (isUnread) markAsRead(msg.id);
+                                            if (window.innerWidth < 768) setShowMobileDetail(true);
+                                        }}
+                                        className={`w-full flex items-center px-4 md:px-6 py-4 transition-colors border-none relative group`}
+                                        style={{ backgroundColor: selectedMessage?.id === msg.id ? colors.surfaceVariant : 'transparent' }}
+                                    >
+                                        <div className="flex items-start gap-4 w-full min-w-0">
+                                            {/* Avatar circular 40px */}
+                                            <div className="shrink-0 pt-0.5">
+                                                <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-base text-white shadow-sm" style={{ backgroundColor: '#0B57D0' }}>
+                                                    {msg.from.charAt(0).toUpperCase()}
+                                                </div>
                                             </div>
-                                            <a href={att.url} download target="_blank" rel="noreferrer" className="p-1.5 text-slate-400 hover:text-green-600"><Download size={14} /></a>
+
+                                            <div className="flex-1 min-w-0 flex flex-col items-start gap-0.5">
+                                                <div className="flex justify-between w-full">
+                                                    <span
+                                                        className={`text-base truncate tracking-tight`}
+                                                        style={{
+                                                            fontWeight: isUnread ? 700 : 400,
+                                                            color: isUnread ? colors.textPrimary : colors.textSecondary
+                                                        }}
+                                                    >
+                                                        {msg.from.split('<')[0].trim() || msg.from}
+                                                    </span>
+                                                    <span
+                                                        className={`shrink-0 text-xs font-medium ml-2`}
+                                                        style={{ color: isUnread ? colors.accentBlue : colors.textMuted }}
+                                                    >
+                                                        {new Date(msg.receivedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                    </span>
+                                                </div>
+                                                <div className="flex flex-col w-full text-left">
+                                                    <span
+                                                        className={`text-sm truncate`}
+                                                        style={{
+                                                            fontWeight: isUnread ? 700 : 400,
+                                                            color: colors.textPrimary
+                                                        }}
+                                                    >
+                                                        {msg.subject}
+                                                    </span>
+                                                    <p
+                                                        className="text-sm line-clamp-1 italic"
+                                                        style={{ color: colors.textMuted }}
+                                                    >
+                                                        {msg.body.replace(/<[^>]*>?/gm, '').substring(0, 100)}
+                                                    </p>
+                                                </div>
+                                            </div>
                                         </div>
-                                    ))}
+                                        {/* Unread Indicator Dot */}
+                                        {isUnread && (
+                                            <div className="absolute left-2 w-1 h-3 bg-[#0B57D0] rounded-r-full" />
+                                        )}
+                                    </button>
+                                );
+                            }) : (
+                                <div className="flex flex-col items-center justify-center h-full opacity-30 text-center p-12">
+                                    <Mail size={64} className="mb-4" />
+                                    <p className="text-xl font-bold uppercase tracking-widest">Bandeja Vacía</p>
+                                    <p className="text-xs font-medium mt-2">No hay mensajes en esta categoría</p>
                                 </div>
                             )}
                         </div>
-                        <div className="p-6 border-t bg-white/50 dark:bg-slate-900/50">
-                            <button onClick={() => { setReplyText(''); setShowCompose(true); setComposeTo(selectedMessage.from); setComposeSubject(`Re: ${selectedMessage.subject}`); }} className="px-6 py-2.5 bg-green-600 text-white rounded-xl font-bold text-sm shadow-md hover:bg-green-700 transition-all w-full flex items-center justify-center gap-2">
-                                <Send size={16} /> Responder
-                            </button>
-                        </div>
                     </div>
-                )}
+
+                    {/* Detail Area Modern / Mobile Slide-in Detail */}
+                    {selectedMessage && (
+                        <div
+                            className={`fixed md:relative inset-0 z-50 md:z-0 md:flex w-full xl:w-[650px] flex flex-col overflow-hidden transition-transform duration-300 ease-in-out ${showMobileDetail ? 'translate-x-0' : 'translate-x-full md:translate-x-0'}`}
+                            style={{ backgroundColor: colors.bg, borderLeft: `1px solid ${theme === 'dark' ? '#2D2F33' : '#E0E0E0'}` }}
+                        >
+                            <div className="p-4 md:p-6 border-b flex justify-between items-center" style={{ borderColor: theme === 'dark' ? '#2D2F33' : '#E0E0E0' }}>
+                                <div className="flex items-center gap-3">
+                                    <button
+                                        onClick={() => setShowMobileDetail(false)}
+                                        className="md:hidden p-2 hover:bg-white/10 rounded-full"
+                                    >
+                                        <ArrowRight size={22} className="rotate-180" style={{ color: colors.textSecondary }} />
+                                    </button>
+                                    <h2 className="text-lg md:text-xl font-bold tracking-tight line-clamp-1">{selectedMessage.subject}</h2>
+                                </div>
+                                <div className="flex gap-1 shrink-0">
+                                    <button onClick={() => setIsMaximized(true)} className="p-2 hover:bg-white/10 rounded-lg text-slate-500 transition-all"><Eye size={20} /></button>
+                                    <button onClick={() => handleDelete(selectedMessage)} className="p-2 hover:bg-red-500/10 rounded-lg text-slate-500 hover:text-red-500 transition-all"><Trash2 size={20} /></button>
+                                    <button onClick={() => { setSelectedMessage(null); setShowMobileDetail(false); }} className="hidden md:flex p-2 hover:bg-white/10 rounded-lg text-slate-500 transition-all"><X size={20} /></button>
+                                </div>
+                            </div>
+                            <div className="flex-1 overflow-y-auto p-6 md:p-8 no-scrollbar">
+                                <div className="flex items-center gap-4 mb-8">
+                                    <div className="w-10 h-10 rounded-full bg-[#0B57D0] text-white flex items-center justify-center font-bold text-sm">
+                                        {selectedMessage.from.charAt(0).toUpperCase()}
+                                    </div>
+                                    <div className="min-w-0">
+                                        <p className="text-sm font-bold truncate">{selectedMessage.from}</p>
+                                        <p className="text-[10px] text-slate-500 font-medium">Para: {selectedMessage.to} • {new Date(selectedMessage.receivedAt).toLocaleString()}</p>
+                                    </div>
+                                </div>
+                                <div className="mb-20">
+                                    <EmailBodyViewer html={selectedMessage.body} theme={theme} />
+                                </div>
+                                {selectedMessage.attachments && selectedMessage.attachments.length > 0 && (
+                                    <div className="mt-8 flex flex-wrap gap-3">
+                                        {selectedMessage.attachments.map((att, i) => (
+                                            <div key={i} className="flex items-center gap-2 p-3 rounded-xl border group transition-all" style={{ backgroundColor: colors.surface, borderColor: theme === 'dark' ? '#2D2F33' : '#E0E0E0' }}>
+                                                <Paperclip size={14} className="text-green-600" />
+                                                <div className="min-w-0 max-w-[120px]">
+                                                    <p className="text-[10px] font-bold truncate uppercase">{att.filename}</p>
+                                                    <p className="text-[8px] font-medium text-slate-400">{(att.size / 1024).toFixed(1)} KB</p>
+                                                </div>
+                                                <a href={att.url} download target="_blank" rel="noreferrer" className="p-1.5 text-slate-400 hover:text-green-600"><Download size={14} /></a>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                            <div className="p-6 border-t" style={{ backgroundColor: colors.bg, borderColor: theme === 'dark' ? '#2D2F33' : '#E0E0E0' }}>
+                                <button
+                                    onClick={() => { setReplyText(''); setShowCompose(true); setComposeTo(selectedMessage.from); setComposeSubject(`Re: ${selectedMessage.subject}`); }}
+                                    className="px-6 py-3 bg-[#0B57D0] text-white rounded-full font-bold text-sm shadow-md hover:bg-[#0842a0] transition-all w-full flex items-center justify-center gap-2"
+                                >
+                                    <Send size={18} /> Responder
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* FAB - Redactar Mobile Gmail Style */}
+                <button
+                    onClick={() => { setComposeTo(''); setComposeSubject(''); setComposeBody(''); setComposeFiles([]); setShowCompose(true); }}
+                    className="md:hidden fixed bottom-6 right-6 w-16 h-16 bg-[#D3E3FD] text-[#041E49] rounded-2xl shadow-xl flex items-center justify-center z-50 hover:scale-105 active:scale-95 transition-all"
+                >
+                    <Plus size={28} />
+                </button>
             </div>
-        </div>
-    );
+        );
+    };
 
     const renderContent = () => {
         return layoutMode === 'glass' ? renderGlassLayout() : renderModernLayout();
@@ -739,8 +952,10 @@ const MailPage = () => {
                                 <X size={24} className="group-hover:rotate-90 transition-transform duration-300" />
                             </button>
                         </div>
-                        <div className="flex-1 overflow-y-auto p-8 md:p-16 text-slate-600 dark:text-slate-300 text-lg md:text-xl leading-relaxed font-medium bg-gradient-to-b from-white to-slate-50/30 dark:from-slate-900 dark:to-slate-950">
-                            <div className="prose dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: selectedMessage.body }} />
+                        <div className="flex-1 overflow-y-auto p-8 md:p-16 text-slate-600 dark:text-slate-300 text-lg md:text-xl leading-relaxed font-medium bg-gradient-to-b from-white to-slate-50/30 dark:from-slate-900 dark:to-slate-950 no-scrollbar">
+                            <div className="prose dark:prose-invert max-w-none">
+                                <EmailBodyViewer html={selectedMessage.body} theme={theme} />
+                            </div>
 
                             {selectedMessage.attachments && selectedMessage.attachments.length > 0 && (
                                 <div className="mt-12 p-8 bg-white/50 dark:bg-slate-800/50 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-sm">
@@ -1044,7 +1259,7 @@ const MailPage = () => {
                                             const storageRef = ref(storage, `profiles/${auth.currentUser?.uid}/${Date.now()}_${file.name}`);
                                             await uploadBytes(storageRef, file);
                                             const url = await getDownloadURL(storageRef);
-                                            await updateProfile?.({ photoURL: url });
+                                            await updateProfile?.(undefined, url);
                                             setUserProfile(prev => ({ ...prev, photoURL: url }));
                                             addToast('success', 'Imagen de perfil actualizada');
                                         }
@@ -1059,7 +1274,7 @@ const MailPage = () => {
                                         value={userProfile.displayName}
                                         onChange={(e) => setUserProfile(prev => ({ ...prev, displayName: e.target.value }))}
                                         onBlur={async () => {
-                                            await updateProfile?.({ displayName: userProfile.displayName });
+                                            await updateProfile?.(userProfile.displayName);
                                             addToast('success', 'Nombre actualizado');
                                         }}
                                         className={`w-full border rounded-2xl px-5 py-3 text-xs font-bold outline-none transition-all ${theme === 'dark' ? 'bg-slate-800 border-white/10 text-white focus:bg-slate-900 focus:border-green-600' : 'bg-slate-50 border-slate-100 text-slate-800 focus:bg-white focus:border-green-600'}`}
