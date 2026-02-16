@@ -44,7 +44,8 @@ const ClientList: React.FC<ClientListProps> = ({ onNavigate }) => {
 
     const filteredClients = clients.filter(client =>
         client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        client.ruc?.includes(searchTerm)
+        client.ruc?.includes(searchTerm) ||
+        client.address?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     return (

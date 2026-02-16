@@ -91,7 +91,7 @@ const MailPage = () => {
     const [searchQuery, setSearchQuery] = useState('');
 
     // UI State
-    const [layoutMode, setLayoutMode] = useState<'modern' | 'glass'>('glass');
+    const [layoutMode, setLayoutMode] = useState<'modern' | 'glass' | 'gmail'>('gmail');
     const [theme, setTheme] = useState<'light' | 'dark'>('light');
     const [showCompose, setShowCompose] = useState(false);
     const [isMaximized, setIsMaximized] = useState(false);
@@ -919,7 +919,320 @@ const MailPage = () => {
         );
     };
 
+    const renderGmailLayout = () => {
+        const colors = theme === 'dark' ? GMAIL_THEME.dark : GMAIL_THEME.light;
+
+        return (
+            <div
+                className={`fixed inset-0 flex flex-col transition-colors duration-300`}
+                style={{ backgroundColor: colors.bg, color: colors.textPrimary, fontFamily: 'Roboto, sans-serif' }}
+            >
+                {/* Header Gmail Style */}
+                <div
+                    className={`h-14 md:h-16 flex items-center justify-between px-4 md:px-6 shrink-0 z-50`}
+                    style={{ borderBottom: `1px solid ${theme === 'dark' ? '#2D2F33' : '#E0E0E0'}` }}
+                >
+                    <div className="flex items-center gap-3 md:gap-6">
+                        <button
+                            onClick={() => setShowMobileSidebar(!showMobileSidebar)}
+                            className="p-2 hover:bg-white/10 rounded-full transition-all"
+                        >
+                            <Menu size={22} style={{ color: colors.textSecondary }} />
+                        </button>
+                        <div className="hidden md:flex items-center gap-2">
+                            <div className="w-10 h-10 bg-[#0B57D0] rounded-xl flex items-center justify-center text-white font-black text-sm shadow-md">E</div>
+                            <span className="text-xl font-bold tracking-tight">Estrumetal <span className="text-[#0B57D0]">Mail</span></span>
+                        </div>
+                    </div>
+
+                    <div className="flex-1 max-w-2xl px-2 md:px-12">
+                        <div
+                            className="relative group flex items-center px-6 py-3 transition-all cursor-text shadow-sm"
+                            style={{
+                                borderRadius: '28px',
+                                backgroundColor: theme === 'dark' ? colors.surfaceVariant : '#f1f3f4'
+                            }}
+                        >
+                            <Search className="text-slate-500 group-focus-within:text-green-600 transition-colors mr-4" size={20} />
+                            <input
+                                type="text"
+                                placeholder="Buscar en el correo..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full bg-transparent border-none outline-none text-base font-normal placeholder:text-slate-500"
+                                style={{ color: colors.textPrimary }}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={() => setLayoutMode('glass')}
+                            className="hidden md:flex p-2 rounded-xl text-slate-400 hover:text-green-600 transition-all hover:bg-white/5"
+                        >
+                            <Layout size={20} />
+                        </button>
+                        <button
+                            onClick={() => setShowSubSettings(true)}
+                            className="p-1 rounded-full border-2 border-transparent hover:border-slate-300 transition-all shrink-0"
+                        >
+                            {userProfile.photoURL ? (
+                                <img src={userProfile.photoURL} alt="User" className="w-9 h-9 rounded-full object-cover" />
+                            ) : (
+                                <div className="w-9 h-9 bg-green-700 rounded-full flex items-center justify-center text-xs text-white font-bold">
+                                    {userProfile.displayName?.charAt(0) || 'U'}
+                                </div>
+                            )}
+                        </button>
+                    </div>
+                </div>
+
+                <div className="flex-1 flex overflow-hidden relative">
+                    {/* Sidebar Gmail Style */}
+                    <div
+                        className={`fixed md:relative inset-y-0 left-0 w-72 md:w-64 z-[60] flex flex-col py-4 shrink-0 transition-transform duration-300 ease-in-out ${showMobileSidebar ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
+                        style={{ backgroundColor: colors.bg }}
+                    >
+                        <div className="px-4 mb-4">
+                            <button
+                                onClick={() => { setComposeTo(''); setComposeSubject(''); setComposeBody(''); setComposeFiles([]); setShowCompose(true); }}
+                                className="bg-[#C2E7FF] text-[#001D35] px-6 py-5 rounded-2xl flex items-center gap-4 hover:shadow-lg transition-all font-bold text-sm shadow-sm"
+                            >
+                                <Plus size={24} /> <span className="text-base">Redactar</span>
+                            </button>
+                        </div>
+
+                        {[
+                            { id: 'inbox', label: 'Recibidos', icon: Inbox },
+                            { id: 'sent', label: 'Enviados', icon: Send },
+                            { id: 'drafts', label: 'Borradores', icon: Clock },
+                            { id: 'archived', label: 'Archivados', icon: Archive },
+                            { id: 'trash', label: 'Papelera', icon: Trash2 },
+                        ].map(folder => {
+                            const isActive = currentFolder === folder.id;
+                            const unreadCount = folder.id === 'inbox' ? messages.filter(m => m.status === 'NEW' && !['SENT', 'TRASH', 'ARCHIVED', 'DRAFT'].includes(m.status)).length : 0;
+                            return (
+                                <button
+                                    key={folder.id}
+                                    onClick={() => { setCurrentFolder(folder.id as any); setShowMobileSidebar(false); }}
+                                    className={`flex items-center gap-4 px-6 py-3 mr-2 rounded-r-full text-sm transition-all group ${isActive ? 'bg-[#D3E3FD] text-[#041E49] font-bold' : 'hover:bg-slate-200/50'}`}
+                                    style={{ color: isActive ? '#041E49' : colors.textSecondary }}
+                                >
+                                    <folder.icon size={20} className={isActive ? 'text-[#041E49]' : colors.textSecondary} />
+                                    <span className="flex-1 text-left text-sm font-normal">{folder.label}</span>
+                                    {unreadCount > 0 && (
+                                        <span className={`text-xs ${isActive ? 'font-bold' : 'font-medium'}`}>
+                                            {unreadCount}
+                                        </span>
+                                    )}
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    {/* Overlay for Mobile Sidebar */}
+                    {showMobileSidebar && (
+                        <div
+                            className="md:hidden fixed inset-0 bg-black/50 z-[55]"
+                            onClick={() => setShowMobileSidebar(false)}
+                        />
+                    )}
+
+                    {/* Email List - Gmail Canvas Style */}
+                    <div className="flex-1 flex flex-col min-w-0 bg-white md:m-2 md:rounded-2xl shadow-sm border border-slate-200 overflow-hidden relative">
+                        <div className="flex-1 overflow-y-auto no-scrollbar">
+                            <div className="flex border-b border-slate-100">
+                                {['Principal', 'Promociones', 'Social'].map((tab, i) => (
+                                    <button
+                                        key={tab}
+                                        className={`px-8 py-4 text-sm font-medium relative transition-colors ${i === 0 ? 'text-[#0B57D0] border-b-[3px] border-[#0B57D0]' : 'text-slate-600 hover:bg-slate-50'}`}
+                                    >
+                                        <div className="flex items-center gap-4">
+                                            {i === 0 && <Inbox size={18} />}
+                                            {tab}
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                            {filteredMessages.length > 0 ? filteredMessages.map(msg => {
+                                const isUnread = msg.status === 'NEW';
+                                return (
+                                    <button
+                                        key={msg.id}
+                                        onClick={() => {
+                                            setSelectedMessage(msg);
+                                            if (isUnread) markAsRead(msg.id);
+                                        }}
+                                        className={`w-full flex items-center px-4 md:px-6 py-3 transition-colors border-b border-slate-50 group ${isUnread ? 'bg-white shadow-sm ring-1 ring-inset ring-slate-100 z-10' : 'bg-[#f2f6fc]/50'}`}
+                                    >
+                                        <div className="flex items-center gap-4 w-full min-w-0">
+                                            <div className="shrink-0 flex items-center gap-3">
+                                                <div className="w-5 h-5 border-2 border-slate-300 rounded-sm group-hover:border-slate-400" />
+                                                <Star size={18} className="text-slate-300 hover:text-yellow-400" />
+                                            </div>
+                                            <div className="flex-1 min-w-0 flex items-center gap-4">
+                                                <span className={`w-48 shrink-0 text-sm truncate ${isUnread ? 'font-bold text-slate-900' : 'text-slate-600'}`}>
+                                                    {msg.from.split('<')[0].trim() || msg.from}
+                                                </span>
+                                                <div className="flex-1 min-w-0 flex items-baseline gap-2">
+                                                    <span className={`text-sm truncate ${isUnread ? 'font-bold text-slate-900' : 'text-slate-600'}`}>
+                                                        {msg.subject}
+                                                    </span>
+                                                    <span className="text-sm text-slate-500 truncate font-normal">
+                                                        - {msg.body.replace(/<[^>]*>?/gm, '').substring(0, 100)}
+                                                    </span>
+                                                </div>
+                                                <span className={`shrink-0 text-xs ${isUnread ? 'font-bold text-slate-900' : 'text-slate-500'}`}>
+                                                    {new Date(msg.receivedAt).toLocaleDateString([], { day: 'numeric', month: 'short' })}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </button>
+                                );
+                            }) : (
+                                <div className="flex flex-col items-center justify-center h-full opacity-30 text-center p-12">
+                                    <Mail size={80} className="mb-6 text-slate-200" />
+                                    <p className="text-xl font-medium text-slate-400">Tu bandeja de entrada está vacía</p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Overlay Message View */}
+                        {selectedMessage && (
+                            <div
+                                className="absolute inset-0 z-40 bg-white flex flex-col md:rounded-2xl animate-in slide-in-from-bottom-4 duration-200"
+                            >
+                                {/* Gmail Toolbar */}
+                                <div className="h-12 flex items-center justify-between px-4 border-b border-slate-100 shrink-0">
+                                    <div className="flex items-center gap-4">
+                                        <button onClick={() => setSelectedMessage(null)} className="p-2 hover:bg-slate-100 rounded-full transition-all text-slate-600">
+                                            <ArrowRight size={20} className="rotate-180" />
+                                        </button>
+                                        <div className="flex items-center gap-1">
+                                            {[
+                                                { icon: Archive, label: 'Archivar', action: () => handleArchive(selectedMessage) },
+                                                { icon: ShieldCheck, label: 'Spam', action: () => { } },
+                                                { icon: Trash2, label: 'Eliminar', action: () => handleDelete(selectedMessage) },
+                                                { icon: Mail, label: 'Marcar como no leído', action: () => markAsUnread(selectedMessage.id) },
+                                                { icon: Clock, label: 'Pospuesto', action: () => { } },
+                                            ].map((btn, i) => (
+                                                <button key={i} onClick={btn.action} title={btn.label} className="p-2 hover:bg-slate-100 rounded-full transition-all text-slate-600">
+                                                    <btn.icon size={18} />
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-4 text-xs text-slate-500 font-medium">
+                                        <span>4 de 37</span>
+                                        <div className="flex items-center gap-1">
+                                            <button className="p-2 hover:bg-slate-100 rounded-full text-slate-300"><ChevronRight size={18} className="rotate-180" /></button>
+                                            <button className="p-2 hover:bg-slate-100 rounded-full text-slate-600"><ChevronRight size={18} /></button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex-1 overflow-y-auto no-scrollbar">
+                                    <div className="max-w-4xl mx-auto px-6 py-8 md:px-12">
+                                        {/* Subject */}
+                                        <div className="flex items-center justify-between mb-8">
+                                            <h1 className="text-[22px] font-normal text-[#1f1f1f] leading-tight flex-1">
+                                                {selectedMessage.subject}
+                                                <span className="ml-2 px-1.5 py-0.5 bg-slate-100 text-slate-500 text-[10px] font-medium rounded uppercase tracking-wider">Recibidos</span>
+                                            </h1>
+                                            <div className="flex items-center gap-4 ml-4">
+                                                <button className="p-1 hover:bg-slate-100 rounded text-slate-400"><Download size={18} /></button>
+                                                <button className="p-1 hover:bg-slate-100 rounded text-slate-400"><X size={18} /></button>
+                                            </div>
+                                        </div>
+
+                                        {/* Sender Metadata */}
+                                        <div className="flex items-start gap-4 mb-8">
+                                            <div className="w-10 h-10 rounded-full bg-[#0B57D0] text-white flex items-center justify-center font-bold text-sm shrink-0">
+                                                {selectedMessage.from.charAt(0).toUpperCase()}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-sm font-bold text-slate-900">{selectedMessage.from.split('<')[0].trim() || selectedMessage.from}</span>
+                                                        <span className="text-xs text-slate-500">&lt;{selectedMessage.from.includes('<') ? selectedMessage.from.split('<')[1].split('>')[0] : selectedMessage.from}&gt;</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="text-xs text-slate-500">{new Date(selectedMessage.receivedAt).toLocaleString([], { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                                                        <div className="flex items-center gap-1">
+                                                            <button className="p-1 hover:bg-slate-100 rounded text-slate-400"><Star size={18} /></button>
+                                                            <button className="p-1 hover:bg-slate-100 rounded text-slate-400"><Smile size={18} /></button>
+                                                            <button className="p-1 hover:bg-slate-100 rounded text-slate-400"><ArrowRight size={18} className="rotate-180" /></button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <p className="text-xs text-slate-500 mt-0.5">para {selectedMessage.to === senderAccount ? 'mí' : selectedMessage.to}</p>
+                                            </div>
+                                        </div>
+
+                                        {/* Email Content */}
+                                        <div className="mb-12">
+                                            <EmailBodyViewer html={selectedMessage.body} theme={theme} />
+                                        </div>
+
+                                        {/* Attachments */}
+                                        {selectedMessage.attachments && selectedMessage.attachments.length > 0 && (
+                                            <div className="mt-8 border-t border-slate-100 pt-8">
+                                                <p className="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
+                                                    <Paperclip size={16} /> Adjuntos ({selectedMessage.attachments.length})
+                                                </p>
+                                                <div className="flex flex-wrap gap-4">
+                                                    {selectedMessage.attachments.map((att, i) => (
+                                                        <div key={i} className="flex flex-col w-48 rounded-lg border border-slate-200 overflow-hidden group hover:shadow-md transition-all">
+                                                            <div className="h-28 bg-slate-50 flex items-center justify-center relative">
+                                                                <ImageIcon size={32} className="text-slate-200" />
+                                                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
+                                                                    <a href={att.url} download target="_blank" rel="noreferrer" className="p-2 bg-white rounded-full shadow-lg text-[#0B57D0]"><Download size={18} /></a>
+                                                                </div>
+                                                            </div>
+                                                            <div className="p-3 bg-white">
+                                                                <p className="text-[11px] font-bold truncate text-slate-700">{att.filename}</p>
+                                                                <p className="text-[9px] text-slate-400 font-medium">{(att.size / 1024).toFixed(1)} KB</p>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Bottom Actions */}
+                                        <div className="mt-12 flex gap-3">
+                                            <button
+                                                onClick={() => { setReplyText(''); setShowCompose(true); setComposeTo(selectedMessage.from); setComposeSubject(`Re: ${selectedMessage.subject}`); }}
+                                                className="flex items-center gap-3 px-6 py-2.5 rounded-full border border-[#747775] text-[#1f1f1f] text-sm font-medium hover:bg-slate-50 transition-all"
+                                            >
+                                                <ArrowRight size={18} className="rotate-180" /> Responder
+                                            </button>
+                                            <button className="flex items-center gap-3 px-6 py-2.5 rounded-full border border-[#747775] text-[#1f1f1f] text-sm font-medium hover:bg-slate-50 transition-all">
+                                                <ArrowRight size={18} /> Reenviar
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* FAB Gmail Style */}
+                {!selectedMessage && (
+                    <button
+                        onClick={() => { setComposeTo(''); setComposeSubject(''); setComposeBody(''); setComposeFiles([]); setShowCompose(true); }}
+                        className="md:hidden fixed bottom-6 right-6 w-14 h-14 bg-[#C2E7FF] text-[#001D35] rounded-2xl shadow-xl flex items-center justify-center z-50 transition-all active:scale-95"
+                    >
+                        <Plus size={28} />
+                    </button>
+                )}
+            </div>
+        );
+    };
+
     const renderContent = () => {
+        if (layoutMode === 'gmail') return renderGmailLayout();
         return layoutMode === 'glass' ? renderGlassLayout() : renderModernLayout();
     };
 
@@ -1284,8 +1597,9 @@ const MailPage = () => {
                                     <div className="flex items-center justify-between mb-4">
                                         <p className="text-[10px] font-black uppercase text-slate-400">Modo de Diseño</p>
                                         <div className="p-1 bg-white dark:bg-slate-900 rounded-xl flex gap-1 shadow-inner border border-slate-100 dark:border-white/5">
-                                            <button onClick={() => setLayoutMode('glass')} className={`p-2 rounded-lg transition-all ${layoutMode === 'glass' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-400'}`}><Layout size={16} /></button>
-                                            <button onClick={() => setLayoutMode('modern')} className={`p-2 rounded-lg transition-all ${layoutMode === 'modern' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-400'}`}><Inbox size={16} /></button>
+                                            <button onClick={() => setLayoutMode('glass')} className={`p-2 rounded-lg transition-all ${layoutMode === 'glass' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-400'}`} title="Glass Mode"><Layout size={16} /></button>
+                                            <button onClick={() => setLayoutMode('modern')} className={`p-2 rounded-lg transition-all ${layoutMode === 'modern' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-400'}`} title="Modern Mode"><Inbox size={16} /></button>
+                                            <button onClick={() => setLayoutMode('gmail')} className={`p-2 rounded-lg transition-all ${layoutMode === 'gmail' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-400'}`} title="Gmail Mode"><Mail size={16} /></button>
                                         </div>
                                     </div>
                                     <div className="flex items-center justify-between">
