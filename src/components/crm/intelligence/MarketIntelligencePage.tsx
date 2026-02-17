@@ -31,6 +31,7 @@ const MarketIntelligencePage = () => {
     const [showOutreach, setShowOutreach] = useState(false);
     const [selectedLeads, setSelectedLeads] = useState<any[]>([]);
     const [showPhysicalUpload, setShowPhysicalUpload] = useState(false);
+    const [rawSnippet, setRawSnippet] = useState('');
 
     useEffect(() => {
         if (activeTab === 'recovery') {
@@ -78,7 +79,19 @@ const MarketIntelligencePage = () => {
                 summary: data.summary
             } : l));
 
-            alert(`Investigación completada para: ${data.full_name}`);
+            // Si es un lead nuevo de entrada manual, lo agregamos al inicio
+            if (leadId.startsWith('manual_')) {
+                setRecoveredLeads(prev => [{
+                    id: leadId,
+                    potential_name: data.full_name || 'Nuevo Lead Investigado',
+                    detected_ruc: data.ruc,
+                    category: data.category,
+                    inquiry_state: data.inquiry_state,
+                    source: 'manual_snippet'
+                }, ...prev]);
+            }
+
+            alert(`Investigación completada para: ${data.full_name || 'el fragmento ingresado'}`);
         } catch (error) {
             console.error("Investigation failed:", error);
         } finally {
@@ -282,24 +295,44 @@ const MarketIntelligencePage = () => {
 
                     {showPhysicalUpload && (
                         <div className="bg-blue-50 border border-blue-100 p-6 rounded-lg flex flex-col items-center gap-4 animate-in slide-in-from-top duration-300">
-                            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center text-blue-600">
-                                <Upload size={32} />
-                            </div>
-                            <div className="text-center">
-                                <h4 className="text-xs font-black text-blue-900 uppercase tracking-tight">Ingesta de Archivos Físicos</h4>
-                                <p className="text-[9px] font-bold text-blue-700 uppercase tracking-widest mt-1">Ciclón de Gemini Vision habilitado para OCR y Clasificación</p>
-                            </div>
-                            <div className="flex gap-2">
-                                <input
-                                    type="file"
-                                    className="hidden"
-                                    id="physical-upload"
-                                    onChange={(e) => e.target.files?.[0] && handlePhysicalUpload(e.target.files[0])}
+                            <div className="text-center w-full max-w-xl">
+                                <h4 className="text-xs font-black text-blue-900 uppercase tracking-tight">Ingesta Agencial (Foto o Texto)</h4>
+                                <p className="text-[9px] font-bold text-blue-700 uppercase tracking-widest mt-1 mb-4">Ciclón de Gemini Vision habilitado para OCR, Investigación y Clasificación</p>
+
+                                <textarea
+                                    value={rawSnippet}
+                                    onChange={(e) => setRawSnippet(e.target.value)}
+                                    placeholder="Pega aquí cualquier dato: 'RUC 20...', 'Empresa Talleres SAC', 'Telf: 998...', o notas al azar."
+                                    className="w-full h-24 bg-white border-2 border-blue-100 rounded-lg p-3 text-[10px] font-bold outline-none focus:ring-4 focus:ring-blue-100 transition-all mb-4"
                                 />
-                                <label htmlFor="physical-upload" className="cursor-pointer px-8 py-2 bg-blue-600 text-white rounded-md text-[10px] font-black uppercase hover:bg-blue-700 shadow-md">
-                                    Seleccionar Fotos/Scans
-                                </label>
-                                <button onClick={() => setShowPhysicalUpload(false)} className="px-4 py-2 text-[10px] font-black uppercase text-blue-500">Cancelar</button>
+
+                                <div className="flex gap-2 justify-center">
+                                    <input
+                                        type="file"
+                                        className="hidden"
+                                        id="physical-upload"
+                                        onChange={(e) => e.target.files?.[0] && handlePhysicalUpload(e.target.files[0])}
+                                    />
+                                    <label htmlFor="physical-upload" className="cursor-pointer px-8 py-2.5 bg-white border-2 border-blue-600 text-blue-600 rounded-lg text-[10px] font-black uppercase hover:bg-blue-50 shadow-sm flex items-center gap-2">
+                                        <Camera size={14} /> Subir Foto
+                                    </label>
+
+                                    <button
+                                        onClick={() => {
+                                            if (rawSnippet) {
+                                                handleInvestigate(`manual_${Date.now()}`, rawSnippet);
+                                                setRawSnippet('');
+                                                setShowPhysicalUpload(false);
+                                            }
+                                        }}
+                                        disabled={!rawSnippet || loading}
+                                        className="px-8 py-2.5 bg-blue-600 text-white rounded-lg text-[10px] font-black uppercase hover:bg-blue-700 shadow-md disabled:bg-blue-300 flex items-center gap-2"
+                                    >
+                                        <Zap size={14} /> Procesar Texto
+                                    </button>
+
+                                    <button onClick={() => setShowPhysicalUpload(false)} className="px-4 py-2 text-[10px] font-black uppercase text-blue-500">Cancelar</button>
+                                </div>
                             </div>
                         </div>
                     )}

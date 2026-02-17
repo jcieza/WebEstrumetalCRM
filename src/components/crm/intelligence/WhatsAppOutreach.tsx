@@ -29,12 +29,30 @@ const WhatsAppOutreach: React.FC<WhatsAppOutreachProps> = ({ leads, onClose }) =
         }
     ];
 
-    const handleSend = async (leadId: string, text: string) => {
+    const handleSend = async (leadId: string, text: string, phone: string) => {
+        if (!phone) {
+            alert('Este lead no tiene un teléfono válido detectado.');
+            return;
+        }
         setIsSending(true);
-        // Simulación de envío vía API
-        await new Promise(r => setTimeout(r, 1000));
+
+        // Limpiamos el teléfono (solo dígitos)
+        const cleanPhone = phone.replace(/\D/g, '');
+        const encodedText = encodeURIComponent(text);
+
+        // Usamos wa.me para un envío funcional sin costo de API
+        const url = `https://wa.me/${cleanPhone.startsWith('51') ? cleanPhone : '51' + cleanPhone}?text=${encodedText}`;
+        window.open(url, '_blank');
+
         setSentStatus(prev => ({ ...prev, [leadId]: 'sent' }));
         setIsSending(false);
+    };
+
+    const handleBulkSend = async () => {
+        const firstLead = leads[0];
+        if (firstLead) {
+            handleSend(firstLead.id, templates[selectedTemplate].text(firstLead.potential_name), firstLead.detected_phone);
+        }
     };
 
     return (
@@ -117,7 +135,7 @@ const WhatsAppOutreach: React.FC<WhatsAppOutreachProps> = ({ leads, onClose }) =
                                 <Clock size={16} /> Programar
                             </button>
                             <button
-                                onClick={() => handleSend(leads[0].id, templates[selectedTemplate].text(leads[0].potential_name))}
+                                onClick={handleBulkSend}
                                 disabled={isSending}
                                 className="flex-[2] py-3 bg-green-800 text-white rounded-xl text-[11px] font-black uppercase shadow-lg shadow-green-900/20 hover:bg-green-900 transition-all flex items-center justify-center gap-2"
                             >
