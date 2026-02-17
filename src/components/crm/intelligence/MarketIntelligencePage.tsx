@@ -8,7 +8,7 @@ import {
     RefreshCw, Smartphone, Target, Users, DollarSign, Mail, Calendar, FileText,
     Download, BarChart3, Zap, Globe, Building2, Star, ArrowRight, Eye, Send,
     PieChart, Briefcase, Award, TrendingDown, Clock, UserPlus, Share2, Camera,
-    FileSearch, Info
+    FileSearch, Info, Plus
 } from 'lucide-react';
 import WhatsAppOutreach from './WhatsAppOutreach';
 
@@ -32,6 +32,12 @@ const MarketIntelligencePage = () => {
     const [selectedLeads, setSelectedLeads] = useState<any[]>([]);
     const [showPhysicalUpload, setShowPhysicalUpload] = useState(false);
     const [rawSnippet, setRawSnippet] = useState('');
+    const [campaigns, setCampaigns] = useState<{ id: string, name: string, leadIds: string[] }[]>([
+        { id: 'camp_1', name: 'Campaña General 2024', leadIds: [] }
+    ]);
+    const [showCampaignModal, setShowCampaignModal] = useState(false);
+    const [newCampaignName, setNewCampaignName] = useState('');
+    const [leadToAddToCampaign, setLeadToAddToCampaign] = useState<string | null>(null);
 
     useEffect(() => {
         if (activeTab === 'recovery') {
@@ -87,6 +93,9 @@ const MarketIntelligencePage = () => {
                     detected_ruc: data.ruc,
                     category: data.category,
                     inquiry_state: data.inquiry_state,
+                    summary: data.summary,
+                    outreach_tip: data.outreach_tip,
+                    missing_data: data.missing_data,
                     source: 'manual_snippet'
                 }, ...prev]);
             }
@@ -130,6 +139,25 @@ const MarketIntelligencePage = () => {
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleAddToCampaign = (campaignId: string) => {
+        if (!leadToAddToCampaign) return;
+        setCampaigns(prev => prev.map(c =>
+            c.id === campaignId
+                ? { ...c, leadIds: [...c.leadIds, leadToAddToCampaign] }
+                : c
+        ));
+        setLeadToAddToCampaign(null);
+        setShowCampaignModal(false);
+        alert('Lead agregado a la campaña correctamente.');
+    };
+
+    const handleCreateCampaign = () => {
+        if (!newCampaignName.trim()) return;
+        const newCampaign = { id: `camp_${Date.now()}`, name: newCampaignName, leadIds: [] };
+        setCampaigns(prev => [...prev, newCampaign]);
+        setNewCampaignName('');
     };
 
     const tabs = [
@@ -282,16 +310,62 @@ const MarketIntelligencePage = () => {
                         >
                             <Camera size={14} /> Digitalizar Físico (OCR)
                         </button>
-                        <button
-                            onClick={() => {
-                                setSelectedLeads(recoveredLeads.slice(0, 10)); // Demo: primeros 10
-                                setShowOutreach(true);
+                        <select
+                            className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-[10px] font-bold uppercase"
+                            onChange={(e) => {
+                                const campaign = campaigns.find(c => c.id === e.target.value);
+                                if (campaign) {
+                                    const campaignLeads = recoveredLeads.filter(l => campaign.leadIds.includes(l.id));
+                                    setSelectedLeads(campaignLeads);
+                                    if (campaignLeads.length > 0) setShowOutreach(true);
+                                    else alert('Esta campaña no tiene leads asignados aún.');
+                                }
                             }}
-                            className="flex items-center gap-2 px-6 py-2.5 bg-green-800 text-white rounded-lg text-[10px] font-black uppercase hover:bg-green-900 transition-all shadow-md"
                         >
-                            <Share2 size={14} /> Iniciar Campaña WhatsApp
-                        </button>
+                            <option value="">Seleccionar Campaña para Outreach...</option>
+                            {campaigns.map(c => <option key={c.id} value={c.id}>{c.name} ({c.leadIds.length})</option>)}
+                        </select>
                     </div>
+
+                    {showCampaignModal && (
+                        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+                            <div className="bg-white p-6 rounded-lg shadow-xl w-96 animate-in zoom-in duration-200">
+                                <h3 className="text-sm font-black text-gray-800 uppercase mb-4">Agregar Lead a Campaña</h3>
+                                <div className="flex flex-col gap-2 mb-4">
+                                    {campaigns.map(c => (
+                                        <button
+                                            key={c.id}
+                                            onClick={() => handleAddToCampaign(c.id)}
+                                            className="p-3 text-left bg-gray-50 hover:bg-blue-50 rounded-lg text-xs font-bold text-gray-700 transition-all border border-gray-100 hover:border-blue-200"
+                                        >
+                                            {c.name} ({c.leadIds.length} leads)
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="border-t border-gray-100 pt-4 flex gap-2">
+                                    <input
+                                        type="text"
+                                        placeholder="Nueva Campaña..."
+                                        className="flex-1 p-2 text-xs border border-gray-200 rounded-md"
+                                        value={newCampaignName}
+                                        onChange={(e) => setNewCampaignName(e.target.value)}
+                                    />
+                                    <button
+                                        onClick={handleCreateCampaign}
+                                        className="px-3 py-2 bg-gray-800 text-white rounded-md text-[10px] font-black uppercase"
+                                    >
+                                        Crear
+                                    </button>
+                                </div>
+                                <button
+                                    onClick={() => setShowCampaignModal(false)}
+                                    className="w-full mt-4 p-2 text-xs font-bold text-gray-500 hover:text-gray-800 uppercase"
+                                >
+                                    Cancelar
+                                </button>
+                            </div>
+                        </div>
+                    )}
 
                     {showPhysicalUpload && (
                         <div className="bg-blue-50 border border-blue-100 p-6 rounded-lg flex flex-col items-center gap-4 animate-in slide-in-from-top duration-300">
@@ -401,8 +475,27 @@ const MarketIntelligencePage = () => {
                                                 >
                                                     <Zap size={12} /> Enriquecer
                                                 </button>
+                                                {lead.summary && (
+                                                    <button
+                                                        onClick={() => alert(`RESUMEN ESTRATÉGICO:\n${lead.summary}\n\nTIP DE CONTACTO:\n${lead.outreach_tip}`)}
+                                                        className="p-1.5 hover:bg-blue-50 text-blue-600 rounded-md transition-all tooltip"
+                                                        title="Ver Análisis IA"
+                                                    >
+                                                        <Info size={16} />
+                                                    </button>
+                                                )}
                                                 <button className="p-1.5 hover:bg-gray-100 text-gray-400 rounded-md transition-all">
                                                     <ArrowRight size={16} />
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        setLeadToAddToCampaign(lead.id);
+                                                        setShowCampaignModal(true);
+                                                    }}
+                                                    className="p-1.5 hover:bg-purple-50 text-purple-600 rounded-md transition-all tooltip"
+                                                    title="Agregar a Campaña"
+                                                >
+                                                    <Plus size={16} />
                                                 </button>
                                             </div>
                                         </td>
