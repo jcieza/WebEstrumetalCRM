@@ -1,12 +1,15 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { db } from '@/lib/firebase';
+import { collection, query, limit, getDocs, orderBy } from 'firebase/firestore';
 import {
     Search, Filter, Upload, MapPin, Phone, AlertCircle, CheckCircle, TrendingUp,
     RefreshCw, Smartphone, Target, Users, DollarSign, Mail, Calendar, FileText,
     Download, BarChart3, Zap, Globe, Building2, Star, ArrowRight, Eye, Send,
-    PieChart, Briefcase, Award, TrendingDown, Clock, UserPlus
+    PieChart, Briefcase, Award, TrendingDown, Clock, UserPlus, Share2
 } from 'lucide-react';
+import WhatsAppOutreach from './WhatsAppOutreach';
 
 const IntelligenceCard = ({ label, value, icon: Icon, color }: any) => (
     <div className="bg-white p-5 border border-gray-100 rounded-lg shadow-sm flex items-center gap-4">
@@ -22,6 +25,36 @@ const IntelligenceCard = ({ label, value, icon: Icon, color }: any) => (
 
 const MarketIntelligencePage = () => {
     const [activeTab, setActiveTab] = useState('leads');
+    const [recoveredLeads, setRecoveredLeads] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [showOutreach, setShowOutreach] = useState(false);
+    const [selectedLeads, setSelectedLeads] = useState<any[]>([]);
+
+    useEffect(() => {
+        if (activeTab === 'recovery') {
+            fetchRecoveredLeads();
+        }
+    }, [activeTab]);
+
+    const fetchRecoveredLeads = async () => {
+        setLoading(true);
+        try {
+            const q = query(
+                collection(db, 'recovered_leads'),
+                limit(50)
+            );
+            const querySnapshot = await getDocs(q);
+            const leads = querySnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            setRecoveredLeads(leads);
+        } catch (error) {
+            console.error("Error fetching leads:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const tabs = [
         { id: 'leads', label: 'Leads B2B (Scraping)', icon: Building2 },
@@ -153,6 +186,98 @@ const MarketIntelligencePage = () => {
                         </button>
                     </div>
                 </div>
+            )}
+
+            {activeTab === 'recovery' && (
+                <div className="flex flex-col gap-4">
+                    <div className="bg-white border border-gray-100 rounded-lg p-5 shadow-sm">
+                        <h3 className="text-sm font-black text-gray-800 uppercase tracking-tight flex items-center gap-2">
+                            <TrendingUp size={18} className="text-red-600" /> Reactivación de Leads (Arqueología)
+                        </h3>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
+                            Mostrando leads detectados en archivos históricos de Estrumetal.
+                        </p>
+                    </div>
+
+                    <div className="flex justify-end pr-2">
+                        <button
+                            onClick={() => {
+                                setSelectedLeads(recoveredLeads.slice(0, 10)); // Demo: primeros 10
+                                setShowOutreach(true);
+                            }}
+                            className="flex items-center gap-2 px-6 py-2.5 bg-green-800 text-white rounded-lg text-[10px] font-black uppercase hover:bg-green-900 transition-all shadow-md"
+                        >
+                            <Share2 size={14} /> Iniciar Campaña WhatsApp
+                        </button>
+                    </div>
+
+                    <div className="bg-white border border-gray-100 rounded-lg shadow-sm overflow-hidden">
+                        <table className="w-full border-collapse">
+                            <thead>
+                                <tr className="bg-gray-50 text-left border-b border-gray-100">
+                                    <th className="p-4 text-[10px] font-black uppercase text-gray-400 tracking-widest">Lead Detectado</th>
+                                    <th className="p-4 text-[10px] font-black uppercase text-gray-400 tracking-widest">Identificador</th>
+                                    <th className="p-4 text-[10px] font-black uppercase text-gray-400 tracking-widest">Fuente (Archivo)</th>
+                                    <th className="p-4 text-[10px] font-black uppercase text-gray-400 tracking-widest text-center">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                                {loading ? (
+                                    <tr>
+                                        <td colSpan={4} className="p-10 text-center text-xs font-bold text-gray-400 uppercase animate-pulse">Cargando cementerio de datos...</td>
+                                    </tr>
+                                ) : recoveredLeads.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={4} className="p-10 text-center text-xs font-bold text-gray-400 uppercase">No se encontraron leads para reactivar.</td>
+                                    </tr>
+                                ) : recoveredLeads.map((lead, i) => (
+                                    <tr key={i} className="hover:bg-gray-50/50 transition-colors">
+                                        <td className="p-4">
+                                            <div className="text-[11px] font-black text-gray-800 uppercase tracking-tight">
+                                                {lead.potential_name || 'SIN NOMBRE'}
+                                            </div>
+                                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1 mt-0.5">
+                                                <AlertCircle size={10} className="text-amber-500" /> Pendiente de Enriquecimiento
+                                            </div>
+                                        </td>
+                                        <td className="p-4">
+                                            <div className="flex flex-col gap-1">
+                                                {lead.detected_ruc && (
+                                                    <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-[9px] font-black rounded w-fit">RUC: {lead.detected_ruc}</span>
+                                                )}
+                                                {lead.detected_phone && (
+                                                    <span className="px-2 py-0.5 bg-blue-50 text-blue-600 text-[9px] font-black rounded w-fit"><Phone size={8} className="inline mr-1" /> {lead.detected_phone}</span>
+                                                )}
+                                            </div>
+                                        </td>
+                                        <td className="p-4 max-w-[200px] truncate">
+                                            <div className="text-[9px] font-bold text-gray-400 uppercase flex items-center gap-1">
+                                                <FileText size={12} /> {lead.filename}
+                                            </div>
+                                        </td>
+                                        <td className="p-4">
+                                            <div className="flex gap-2 justify-center">
+                                                <button className="flex items-center gap-1 px-3 py-1.5 bg-green-800 text-white rounded text-[9px] font-black uppercase hover:bg-green-900 transition-all shadow-sm">
+                                                    <Zap size={12} /> Enriquecer
+                                                </button>
+                                                <button className="p-1.5 hover:bg-gray-100 text-gray-400 rounded-md transition-all">
+                                                    <ArrowRight size={16} />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {showOutreach && (
+                <WhatsAppOutreach
+                    leads={selectedLeads.length > 0 ? selectedLeads : recoveredLeads.slice(0, 10)}
+                    onClose={() => setShowOutreach(false)}
+                />
             )}
         </div>
     );

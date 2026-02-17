@@ -1,0 +1,82 @@
+[
+    {
+        "source_path": "c:\\Users\\BENJI\\Documents\\Obsidian Estrumetal\\Playgraund\\Cotizaciones",
+        "folder_name": "Cotizaciones",
+        "detected_ruc": null,
+        "detected_phone": null,
+        "type": "folder_discovery",
+        "files_count": 9
+    },
+    {
+        "source_path": "c:\\Users\\BENJI\\Documents\\Obsidian Estrumetal\\Playgraund\\Cotizaciones\\COTIZACION 2019",
+        "folder_name": "COTIZACION 2019",
+        "detected_ruc": null,
+        "detected_phone": null,
+        "type": "folder_discovery",
+        "files_count": 6
+    },
+    {
+        "source_path": "c:\\Users\\BENJI\\Documents\\Obsidian Estrumetal\\Playgraund\\Cotizaciones\\COTIZACION 2021",
+        "folder_name": "COTIZACION 2021",
+        "detected_ruc": null,
+        "detected_phone": null,
+        "type": "folder_discovery",
+        "files_count": 3
+    },
+    {
+        "source_path": "c:\\Users\\BENJI\\Documents\\Obsidian Estrumetal\\Playgraund\\Cotizaciones\\COTIZACION 2022",
+        "folder_name": "COTIZACION 2022",
+        "detected_ruc": null,
+        "detected_phone": null,
+        "type": "folder_discovery",
+        "files_count": 4
+    },
+    {
+        "source_path": "c:\\Users\\BENJI\\Documents\\Obsidian Estrumetal\\Playgraund\\Cotizaciones\\COTIZACION 2023",
+        "folder_name": "COTIZACION 2023",
+        "detected_ruc": null,
+        "detected_phone": null,
+        "type": "folder_discovery",
+        "files_count": 0
+    },
+    {
+        "source_path": "c:\\Users\\BENJI\\Documents\\Obsidian Estrumetal\\Playgraund\\CRM-PRODUCTION\\Drive-cotizaciones",
+        "folder_name": "Drive-cotizaciones",
+        "detected_ruc": null,
+        "detected_phone": null,
+        "type": "folder_discovery",
+        "files_count": 0
+    },
+    {
+        "source_path": "c:\\Users\\BENJI\\Documents\\Obsidian Estrumetal\\Playgraund\\CRM-PRODUCTION\\Drive-cotizaciones\\COTIZACION 2019",
+        "folder_name": "COTIZACION 2019",
+        "detected_ruc": null,
+        "detected_phone": null,
+        "type": "folder_discovery",
+        "files_count": 0
+    },
+    {
+        "source_path": "c:\\Users\\BENJI\\Documents\\Obsidian Estrumetal\\Playgraund\\CRM-PRODUCTION\\Drive-cotizaciones\\COTIZACION 2021",
+        "folder_name": "COTIZACION 2021",
+        "detected_ruc": null,
+        "detected_phone": null,
+        "type": "folder_discovery",
+        "files_count": 0
+    },
+    {
+        "source_path": "c:\\Users\\BENJI\\Documents\\Obsidian Estrumetal\\Playgraund\\CRM-PRODUCTION\\Drive-cotizaciones\\COTIZACION 2022",
+        "folder_name": "COTIZACION 2022",
+        "detected_ruc": null,
+        "detected_phone": null,
+        "type": "folder_discovery",
+        "files_count": 0
+    },
+    {
+        "source_path": "c:\\Users\\BENJI\\Documents\\Obsidian Estrumetal\\Playgraund\\CRM-PRODUCTION\\Drive-cotizaciones\\COTIZACION 2023",
+        "folder_name": "COTIZACION 2023",
+        "detected_ruc": null,
+        "detected_phone": null,
+        "type": "folder_discovery",
+        "files_count": 0
+    }
+]
