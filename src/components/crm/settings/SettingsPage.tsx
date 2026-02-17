@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import {
     Settings as SettingsIcon, Bell, Palette, Shield,
-    MessageSquare, Server, Database, Save, Zap, Check, Smartphone, Lock, Trash2, Edit2, Plus, DownloadCloud, RefreshCw, X, Clock, User
+    MessageSquare, Server, Database, Save, Zap, Check, Smartphone, Lock, Trash2, Edit2, Plus, DownloadCloud, RefreshCw, X, Clock, User, Activity, Monitor, Info
 } from 'lucide-react';
 import { auth } from '@/lib/firebase';
 import { updateProfile, updatePassword } from 'firebase/auth';
@@ -45,6 +45,9 @@ const SettingsPage = () => {
         confirm: ''
     });
 
+    const [metrics, setMetrics] = useState<any>(null);
+    const [fetchingMetrics, setFetchingMetrics] = useState(false);
+
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
@@ -79,11 +82,25 @@ const SettingsPage = () => {
         }
     };
 
+    const fetchMetrics = async () => {
+        setFetchingMetrics(true);
+        try {
+            const res = await fetch('/api/system/metrics');
+            const data = await res.json();
+            setMetrics(data);
+        } catch (e) {
+            console.error('Failed to fetch metrics:', e);
+        } finally {
+            setFetchingMetrics(false);
+        }
+    };
+
     const sections = [
         { id: 'general', label: 'General', icon: SettingsIcon },
         { id: 'profile', label: 'Perfil', icon: User },
         { id: 'appearance', label: 'Apariencia', icon: Palette },
         { id: 'integrations', label: 'Integraciones', icon: Server },
+        { id: 'monitoring', label: 'Monitoreo', icon: Activity },
         { id: 'database', label: 'Base de Datos', icon: Database },
         { id: 'security', label: 'Seguridad', icon: Shield },
     ];
@@ -219,31 +236,74 @@ const SettingsPage = () => {
                         </div>
                     )}
 
-                    {activeSection === 'database' && (
+                    {activeSection === 'monitoring' && (
                         <div className="flex flex-col gap-4">
-                            {renderHeader('Maestro de Datos', Database)}
-                            <div className="bg-white border border-gray-100 rounded-lg shadow-sm overflow-hidden">
-                                <div className="p-4 bg-gray-50 flex justify-between items-center border-b border-gray-100">
-                                    <div className="flex gap-2">
-                                        <button className="px-4 py-1.5 bg-green-800 text-white text-[9px] font-black uppercase rounded-md shadow-sm">Clientes</button>
-                                        <button className="px-4 py-1.5 bg-white border border-gray-200 text-gray-500 text-[9px] font-black uppercase rounded-md">Contactos</button>
-                                        <button className="px-4 py-1.5 bg-white border border-gray-200 text-gray-500 text-[9px] font-black uppercase rounded-md">Proveedores</button>
+                            {renderHeader('Estado de Infraestructura', Activity)}
+
+                            <div className="bg-white border border-gray-100 rounded-lg p-6 shadow-sm flex flex-col gap-6">
+                                <div className="flex justify-between items-center">
+                                    <div>
+                                        <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400">Servidores & App Hosting</h3>
+                                        <p className="text-[9px] font-bold text-gray-500 uppercase tracking-tighter mt-1 italic">Consulta bajo demanda para optimización de recursos</p>
                                     </div>
-                                    <button className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 text-gray-600 text-[9px] font-black uppercase rounded-md hover:bg-gray-50">
-                                        <DownloadCloud size={14} /> Fusionar Backup
+                                    <button
+                                        onClick={fetchMetrics}
+                                        disabled={fetchingMetrics}
+                                        className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg text-[9px] font-black uppercase hover:bg-black transition-all shadow-sm"
+                                    >
+                                        <RefreshCw size={12} className={fetchingMetrics ? 'animate-spin' : ''} />
+                                        {fetchingMetrics ? 'Consultando...' : 'Actualizar Estado'}
                                     </button>
                                 </div>
-                                <div className="p-10 text-center flex flex-col items-center gap-4 border-b border-gray-50">
-                                    <div className="p-4 bg-gray-50 rounded-full text-gray-300">
-                                        <Database size={40} />
+
+                                {metrics ? (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-in fade-in duration-500">
+                                        <div className="p-4 bg-gray-50 border border-gray-100 rounded-xl">
+                                            <div className="text-[8px] font-black text-gray-400 uppercase mb-2">Uptime del Servidor</div>
+                                            <div className="text-sm font-black text-green-800 font-mono">{metrics.uptime.human}</div>
+                                            <div className="text-[8px] font-bold text-gray-400 mt-1 uppercase italic tracking-tighter">Desde el último despliegue</div>
+                                        </div>
+                                        <div className="p-4 bg-gray-50 border border-gray-100 rounded-xl">
+                                            <div className="text-[8px] font-black text-gray-400 uppercase mb-2">Memoria RAM (Heap Used)</div>
+                                            <div className="text-sm font-black text-blue-800 font-mono">{metrics.memory.heapUsed}</div>
+                                            <div className="text-[8px] font-bold text-gray-400 mt-1 uppercase italic tracking-tighter">Total asignado: {metrics.memory.heapTotal}</div>
+                                        </div>
+                                        <div className="p-4 bg-gray-50 border border-gray-100 rounded-xl">
+                                            <div className="text-[8px] font-black text-gray-400 uppercase mb-2">Node.js Version</div>
+                                            <div className="text-sm font-black text-orange-800 font-mono">{metrics.environment.node}</div>
+                                            <div className="text-[8px] font-bold text-gray-400 mt-1 uppercase italic tracking-tighter">Platform: {metrics.environment.platform}</div>
+                                        </div>
+                                        <div className="p-4 bg-gray-50 border border-gray-100 rounded-xl lg:col-span-3 flex justify-between items-center">
+                                            <div className="flex gap-4">
+                                                <div className="flex items-center gap-2">
+                                                    <div className={`w-2 h-2 rounded-full ${metrics.services.firestore === 'connected' ? 'bg-green-500' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]'}`} />
+                                                    <span className="text-[9px] font-black uppercase text-gray-700">Firestore {metrics.services.firestore}</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className={`w-2 h-2 rounded-full ${metrics.services.gemini === 'active' ? 'bg-blue-500' : 'bg-gray-400'}`} />
+                                                    <span className="text-[9px] font-black uppercase text-gray-700">Gemini 1.5 Flash {metrics.services.gemini}</span>
+                                                </div>
+                                            </div>
+                                            <div className="text-[8px] font-bold text-gray-300 uppercase italic">Última revisión: {new Date(metrics.timestamp).toLocaleTimeString()}</div>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <div className="text-xs font-black text-gray-800 uppercase">Editor de Registros Maestros</div>
-                                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter mt-1 italic">Conectado a Firestore Real-time</div>
+                                ) : (
+                                    <div className="p-12 border-2 border-dashed border-gray-100 rounded-xl flex flex-col items-center justify-center text-gray-300">
+                                        <Activity size={48} className="mb-4 opacity-20" />
+                                        <p className="text-[10px] font-black uppercase tracking-widest opacity-40">Métricas no consultadas todavía</p>
                                     </div>
-                                    <button className="mt-2 px-6 py-2 bg-green-800 text-white text-[10px] font-black uppercase rounded-lg hover:bg-green-900 shadow-md">
-                                        Cargar Tabla Maestra
-                                    </button>
+                                )}
+                            </div>
+
+                            <div className="bg-yellow-50 border border-yellow-100 p-5 rounded-lg flex gap-4">
+                                <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center text-yellow-700 flex-shrink-0">
+                                    <Info size={20} />
+                                </div>
+                                <div>
+                                    <h4 className="text-[10px] font-black uppercase text-yellow-900 mb-1">Nota de Optimización</h4>
+                                    <p className="text-[10px] font-bold text-yellow-700 leading-relaxed uppercase tracking-tight">
+                                        Para optimizar el consumo de RAM en Firebase App Hosting, considera implementar caching progresivo en los endpoints de inteligencia y reducir el tamaño de los bundles de cliente.
+                                    </p>
                                 </div>
                             </div>
                         </div>

@@ -7,7 +7,8 @@ import {
     Search, Filter, Upload, MapPin, Phone, AlertCircle, CheckCircle, TrendingUp,
     RefreshCw, Smartphone, Target, Users, DollarSign, Mail, Calendar, FileText,
     Download, BarChart3, Zap, Globe, Building2, Star, ArrowRight, Eye, Send,
-    PieChart, Briefcase, Award, TrendingDown, Clock, UserPlus, Share2
+    PieChart, Briefcase, Award, TrendingDown, Clock, UserPlus, Share2, Camera,
+    FileSearch, Info
 } from 'lucide-react';
 import WhatsAppOutreach from './WhatsAppOutreach';
 
@@ -29,6 +30,7 @@ const MarketIntelligencePage = () => {
     const [loading, setLoading] = useState(false);
     const [showOutreach, setShowOutreach] = useState(false);
     const [selectedLeads, setSelectedLeads] = useState<any[]>([]);
+    const [showPhysicalUpload, setShowPhysicalUpload] = useState(false);
 
     useEffect(() => {
         if (activeTab === 'recovery') {
@@ -51,6 +53,67 @@ const MarketIntelligencePage = () => {
             setRecoveredLeads(leads);
         } catch (error) {
             console.error("Error fetching leads:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleInvestigate = async (leadId: string, text: string) => {
+        setLoading(true);
+        try {
+            const response = await fetch('/api/intelligence/investigate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text })
+            });
+            const data = await response.json();
+
+            // Simular actualización en Firestore para la UI inmediata
+            setRecoveredLeads(prev => prev.map(l => l.id === leadId ? {
+                ...l,
+                potential_name: data.full_name || l.potential_name,
+                detected_ruc: data.ruc || l.detected_ruc,
+                category: data.category,
+                inquiry_state: data.inquiry_state,
+                summary: data.summary
+            } : l));
+
+            alert(`Investigación completada para: ${data.full_name}`);
+        } catch (error) {
+            console.error("Investigation failed:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handlePhysicalUpload = async (file: File) => {
+        setLoading(true);
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('text', 'Digitalización de documento físico');
+
+            const response = await fetch('/api/intelligence/investigate', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await response.json();
+
+            // En un flujo real, crearíamos un nuevo lead en Firestore
+            setRecoveredLeads(prev => [{
+                id: `new_${Date.now()}`,
+                potential_name: data.full_name,
+                detected_ruc: data.ruc,
+                category: data.category,
+                inquiry_state: data.inquiry_state,
+                filename: file.name,
+                source: 'physical_ingestion'
+            }, ...prev]);
+
+            setShowPhysicalUpload(false);
+            alert(`Nuevo lead registrado desde físico: ${data.full_name}`);
+        } catch (error) {
+            console.error("Physical upload failed:", error);
         } finally {
             setLoading(false);
         }
@@ -195,11 +258,17 @@ const MarketIntelligencePage = () => {
                             <TrendingUp size={18} className="text-red-600" /> Reactivación de Leads (Arqueología)
                         </h3>
                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
-                            Mostrando leads detectados en archivos históricos de Estrumetal.
+                            Mostrando leads detectados en archivos históricos y documentación física de Estrumetal.
                         </p>
                     </div>
 
-                    <div className="flex justify-end pr-2">
+                    <div className="flex justify-end gap-3 pr-2">
+                        <button
+                            onClick={() => setShowPhysicalUpload(true)}
+                            className="flex items-center gap-2 px-6 py-2.5 bg-white border-2 border-gray-800 text-gray-800 rounded-lg text-[10px] font-black uppercase hover:bg-gray-50 transition-all shadow-sm"
+                        >
+                            <Camera size={14} /> Digitalizar Físico (OCR)
+                        </button>
                         <button
                             onClick={() => {
                                 setSelectedLeads(recoveredLeads.slice(0, 10)); // Demo: primeros 10
@@ -210,6 +279,30 @@ const MarketIntelligencePage = () => {
                             <Share2 size={14} /> Iniciar Campaña WhatsApp
                         </button>
                     </div>
+
+                    {showPhysicalUpload && (
+                        <div className="bg-blue-50 border border-blue-100 p-6 rounded-lg flex flex-col items-center gap-4 animate-in slide-in-from-top duration-300">
+                            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center text-blue-600">
+                                <Upload size={32} />
+                            </div>
+                            <div className="text-center">
+                                <h4 className="text-xs font-black text-blue-900 uppercase tracking-tight">Ingesta de Archivos Físicos</h4>
+                                <p className="text-[9px] font-bold text-blue-700 uppercase tracking-widest mt-1">Ciclón de Gemini Vision habilitado para OCR y Clasificación</p>
+                            </div>
+                            <div className="flex gap-2">
+                                <input
+                                    type="file"
+                                    className="hidden"
+                                    id="physical-upload"
+                                    onChange={(e) => e.target.files?.[0] && handlePhysicalUpload(e.target.files[0])}
+                                />
+                                <label htmlFor="physical-upload" className="cursor-pointer px-8 py-2 bg-blue-600 text-white rounded-md text-[10px] font-black uppercase hover:bg-blue-700 shadow-md">
+                                    Seleccionar Fotos/Scans
+                                </label>
+                                <button onClick={() => setShowPhysicalUpload(false)} className="px-4 py-2 text-[10px] font-black uppercase text-blue-500">Cancelar</button>
+                            </div>
+                        </div>
+                    )}
 
                     <div className="bg-white border border-gray-100 rounded-lg shadow-sm overflow-hidden">
                         <table className="w-full border-collapse">
@@ -236,8 +329,20 @@ const MarketIntelligencePage = () => {
                                             <div className="text-[11px] font-black text-gray-800 uppercase tracking-tight">
                                                 {lead.potential_name || 'SIN NOMBRE'}
                                             </div>
-                                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1 mt-0.5">
-                                                <AlertCircle size={10} className="text-amber-500" /> Pendiente de Enriquecimiento
+                                            <div className="flex items-center gap-2 mt-1">
+                                                {lead.inquiry_state === 'FALTA_INFO' ? (
+                                                    <span className="text-[8px] font-black bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded uppercase tracking-tighter flex items-center gap-1">
+                                                        <Info size={10} /> Falta Info
+                                                    </span>
+                                                ) : lead.inquiry_state === 'ENRIQUECIDO' ? (
+                                                    <span className="text-[8px] font-black bg-green-100 text-green-700 px-1.5 py-0.5 rounded uppercase tracking-tighter flex items-center gap-1">
+                                                        <CheckCircle size={10} /> Enriquecido
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-[8px] font-black bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded uppercase tracking-tighter flex items-center gap-1">
+                                                        <Clock size={10} /> Sin Indagar
+                                                    </span>
+                                                )}
                                             </div>
                                         </td>
                                         <td className="p-4">
@@ -257,7 +362,10 @@ const MarketIntelligencePage = () => {
                                         </td>
                                         <td className="p-4">
                                             <div className="flex gap-2 justify-center">
-                                                <button className="flex items-center gap-1 px-3 py-1.5 bg-green-800 text-white rounded text-[9px] font-black uppercase hover:bg-green-900 transition-all shadow-sm">
+                                                <button
+                                                    onClick={() => handleInvestigate(lead.id, lead.potential_name || lead.filename)}
+                                                    className="flex items-center gap-1 px-3 py-1.5 bg-green-800 text-white rounded text-[9px] font-black uppercase hover:bg-green-900 transition-all shadow-sm"
+                                                >
                                                     <Zap size={12} /> Enriquecer
                                                 </button>
                                                 <button className="p-1.5 hover:bg-gray-100 text-gray-400 rounded-md transition-all">
