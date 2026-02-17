@@ -947,19 +947,19 @@ const MailPage = () => {
 
                     <div className="flex-1 max-w-2xl px-2 md:px-12">
                         <div
-                            className="relative group flex items-center px-6 py-3 transition-all cursor-text shadow-sm"
+                            className="relative group flex items-center px-4 md:px-6 py-2.5 md:py-3 transition-all cursor-text shadow-sm"
                             style={{
                                 borderRadius: '28px',
                                 backgroundColor: theme === 'dark' ? colors.surfaceVariant : '#f1f3f4'
                             }}
                         >
-                            <Search className="text-slate-500 group-focus-within:text-green-600 transition-colors mr-4" size={20} />
+                            <Search className="text-slate-500 group-focus-within:text-green-600 transition-colors mr-3 md:mr-4" size={20} />
                             <input
                                 type="text"
                                 placeholder="Buscar en el correo..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full bg-transparent border-none outline-none text-base font-normal placeholder:text-slate-500"
+                                className="w-full bg-transparent border-none outline-none text-sm md:text-base font-normal placeholder:text-slate-500"
                                 style={{ color: colors.textPrimary }}
                             />
                         </div>
@@ -996,7 +996,7 @@ const MailPage = () => {
                         <div className="px-4 mb-4">
                             <button
                                 onClick={() => { setComposeTo(''); setComposeSubject(''); setComposeBody(''); setComposeFiles([]); setShowCompose(true); }}
-                                className="bg-[#C2E7FF] text-[#001D35] px-6 py-5 rounded-2xl flex items-center gap-4 hover:shadow-lg transition-all font-bold text-sm shadow-sm"
+                                className="hidden md:flex bg-[#C2E7FF] text-[#001D35] px-6 py-5 rounded-2xl items-center gap-4 hover:shadow-lg transition-all font-bold text-sm shadow-sm"
                             >
                                 <Plus size={24} /> <span className="text-base">Redactar</span>
                             </button>
@@ -1063,26 +1063,46 @@ const MailPage = () => {
                                             setSelectedMessage(msg);
                                             if (isUnread) markAsRead(msg.id);
                                         }}
-                                        className={`w-full flex items-center px-4 md:px-6 py-3 transition-colors border-b border-slate-50 group ${isUnread ? 'bg-white shadow-sm ring-1 ring-inset ring-slate-100 z-10' : 'bg-[#f2f6fc]/50'}`}
+                                        className={`w-full flex items-start md:items-center px-4 md:px-6 py-4 md:py-3 transition-colors border-b border-slate-50 group ${isUnread ? 'bg-white shadow-sm ring-1 ring-inset ring-slate-100 z-10' : 'bg-[#f2f6fc]/50'}`}
                                     >
-                                        <div className="flex items-center gap-4 w-full min-w-0">
-                                            <div className="shrink-0 flex items-center gap-3">
+                                        <div className="flex items-start md:items-center gap-4 w-full min-w-0">
+                                            {/* Left side: Selection and Star (Desktop only) */}
+                                            <div className="hidden md:flex shrink-0 items-center gap-3">
                                                 <div className="w-5 h-5 border-2 border-slate-300 rounded-sm group-hover:border-slate-400" />
                                                 <Star size={18} className="text-slate-300 hover:text-yellow-400" />
                                             </div>
-                                            <div className="flex-1 min-w-0 flex items-center gap-4">
-                                                <span className={`w-48 shrink-0 text-sm truncate ${isUnread ? 'font-bold text-slate-900' : 'text-slate-600'}`}>
-                                                    {msg.from.split('<')[0].trim() || msg.from}
-                                                </span>
-                                                <div className="flex-1 min-w-0 flex items-baseline gap-2">
-                                                    <span className={`text-sm truncate ${isUnread ? 'font-bold text-slate-900' : 'text-slate-600'}`}>
-                                                        {msg.subject}
+
+                                            {/* Mobile Avatar */}
+                                            <div className="md:hidden shrink-0 mt-1">
+                                                <div className="w-10 h-10 rounded-full bg-[#0B57D0] text-white flex items-center justify-center font-bold text-sm shadow-sm">
+                                                    {msg.from.charAt(0).toUpperCase()}
+                                                </div>
+                                            </div>
+
+                                            <div className="flex-1 min-w-0 flex flex-col md:flex-row md:items-center gap-0.5 md:gap-4">
+                                                {/* Sender - Row 1 Mobile, Col 1 Desktop */}
+                                                <div className="flex justify-between items-center md:block md:w-48 md:shrink-0">
+                                                    <span className={`text-sm md:text-sm truncate ${isUnread ? 'font-bold text-slate-900' : 'text-slate-600'}`}>
+                                                        {msg.from.split('<')[0].trim() || msg.from}
                                                     </span>
-                                                    <span className="text-sm text-slate-500 truncate font-normal">
-                                                        - {msg.body.replace(/<[^>]*>?/gm, '').substring(0, 100)}
+                                                    {/* Date - Desktop remains far right, Mobile moves here */}
+                                                    <span className={`md:hidden shrink-0 text-xs ${isUnread ? 'font-bold text-slate-900' : 'text-slate-500'}`}>
+                                                        {new Date(msg.receivedAt).toLocaleDateString([], { day: 'numeric', month: 'short' })}
                                                     </span>
                                                 </div>
-                                                <span className={`shrink-0 text-xs ${isUnread ? 'font-bold text-slate-900' : 'text-slate-500'}`}>
+
+                                                {/* Subject and Body - Row 2 & 3 Mobile, Row 1 Desktop */}
+                                                <div className="flex-1 min-w-0 flex flex-col md:flex-row md:items-baseline md:gap-2">
+                                                    <span className={`text-sm md:text-sm truncate ${isUnread ? 'font-bold text-slate-900' : 'text-slate-600'}`}>
+                                                        {msg.subject}
+                                                    </span>
+                                                    <span className="text-sm text-slate-500 truncate font-normal line-clamp-2 md:line-clamp-1">
+                                                        {window.innerWidth < 768 ? '' : '- '}{msg.body.replace(/<[^>]*>?/gm, '').substring(0, 100)}
+                                                    </span>
+                                                </div>
+
+                                                {/* Date - Desktop far right */}
+                                                <span className={`hidden md:block shrink-0 text-xs ${isUnread ? 'font-bold text-slate-900' : 'text-slate-500'}`}>
                                                     {new Date(msg.receivedAt).toLocaleDateString([], { day: 'numeric', month: 'short' })}
                                                 </span>
                                             </div>
@@ -1103,26 +1123,31 @@ const MailPage = () => {
                                 className="absolute inset-0 z-40 bg-white flex flex-col md:rounded-2xl animate-in slide-in-from-bottom-4 duration-200"
                             >
                                 {/* Gmail Toolbar */}
-                                <div className="h-12 flex items-center justify-between px-4 border-b border-slate-100 shrink-0">
-                                    <div className="flex items-center gap-4">
+                                <div className="h-14 md:h-12 flex items-center justify-between px-2 md:px-4 border-b border-slate-100 shrink-0">
+                                    <div className="flex items-center gap-1 md:gap-4">
                                         <button onClick={() => setSelectedMessage(null)} className="p-2 hover:bg-slate-100 rounded-full transition-all text-slate-600">
                                             <ArrowRight size={20} className="rotate-180" />
                                         </button>
-                                        <div className="flex items-center gap-1">
+                                        <div className="flex items-center gap-0.5 md:gap-1">
                                             {[
                                                 { icon: Archive, label: 'Archivar', action: () => handleArchive(selectedMessage) },
-                                                { icon: ShieldCheck, label: 'Spam', action: () => { } },
                                                 { icon: Trash2, label: 'Eliminar', action: () => handleDelete(selectedMessage) },
-                                                { icon: Mail, label: 'Marcar como no leído', action: () => markAsUnread(selectedMessage.id) },
+                                                { icon: Mail, label: 'Marcar no leído', action: () => markAsUnread(selectedMessage.id) },
                                                 { icon: Clock, label: 'Pospuesto', action: () => { } },
+                                                { icon: Menu, label: 'Más', action: () => { } },
                                             ].map((btn, i) => (
-                                                <button key={i} onClick={btn.action} title={btn.label} className="p-2 hover:bg-slate-100 rounded-full transition-all text-slate-600">
+                                                <button
+                                                    key={i}
+                                                    onClick={btn.action}
+                                                    title={btn.label}
+                                                    className={`p-2 hover:bg-slate-100 rounded-full transition-all text-slate-600 ${i > 2 ? 'hidden md:flex' : 'flex'}`}
+                                                >
                                                     <btn.icon size={18} />
                                                 </button>
                                             ))}
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-4 text-xs text-slate-500 font-medium">
+                                    <div className="hidden sm:flex items-center gap-4 text-xs text-slate-500 font-medium">
                                         <span>4 de 37</span>
                                         <div className="flex items-center gap-1">
                                             <button className="p-2 hover:bg-slate-100 rounded-full text-slate-300"><ChevronRight size={18} className="rotate-180" /></button>
@@ -1134,14 +1159,13 @@ const MailPage = () => {
                                 <div className="flex-1 overflow-y-auto no-scrollbar">
                                     <div className="max-w-4xl mx-auto px-6 py-8 md:px-12">
                                         {/* Subject */}
-                                        <div className="flex items-center justify-between mb-8">
-                                            <h1 className="text-[22px] font-normal text-[#1f1f1f] leading-tight flex-1">
+                                        <div className="flex items-start justify-between mb-6 md:mb-8">
+                                            <h1 className="text-xl md:text-[22px] font-normal text-[#1f1f1f] leading-tight flex-1">
                                                 {selectedMessage.subject}
-                                                <span className="ml-2 px-1.5 py-0.5 bg-slate-100 text-slate-500 text-[10px] font-medium rounded uppercase tracking-wider">Recibidos</span>
+                                                <span className="ml-2 px-1.5 py-0.5 bg-slate-100 text-slate-500 text-[10px] font-medium rounded uppercase tracking-wider inline-block align-middle">Recibidos</span>
                                             </h1>
-                                            <div className="flex items-center gap-4 ml-4">
-                                                <button className="p-1 hover:bg-slate-100 rounded text-slate-400"><Download size={18} /></button>
-                                                <button className="p-1 hover:bg-slate-100 rounded text-slate-400"><X size={18} /></button>
+                                            <div className="flex items-center gap-2 md:gap-4 ml-4">
+                                                <button className="p-2 hover:bg-slate-100 rounded-full text-slate-400"><Star size={20} /></button>
                                             </div>
                                         </div>
 
@@ -1218,11 +1242,12 @@ const MailPage = () => {
                     </div>
                 </div>
 
-                {/* FAB Gmail Style */}
+                {/* FAB Gmail M3 Style */}
                 {!selectedMessage && (
                     <button
                         onClick={() => { setComposeTo(''); setComposeSubject(''); setComposeBody(''); setComposeFiles([]); setShowCompose(true); }}
-                        className="md:hidden fixed bottom-6 right-6 w-14 h-14 bg-[#C2E7FF] text-[#001D35] rounded-2xl shadow-xl flex items-center justify-center z-50 transition-all active:scale-95"
+                        className="md:hidden fixed bottom-6 right-6 w-14 h-14 bg-[#C2E7FF] text-[#001D35] rounded-2xl shadow-xl flex items-center justify-center z-50 transition-all active:scale-95 shadow-[#C2E7FF]/20"
+                        style={{ borderRadius: '16px' }}
                     >
                         <Plus size={28} />
                     </button>
