@@ -171,10 +171,6 @@ const MailPage = () => {
             });
             setLoading(false);
 
-            if (window.innerWidth >= 768 && msgs.length > 0 && !selectedMessage) {
-                const firstInbox = msgs.find(m => !['SENT', 'TRASH', 'ARCHIVED', 'DRAFT'].includes(m.status));
-                if (firstInbox) setSelectedMessage(firstInbox);
-            }
         });
         return () => unsubscribe();
     }, [selectedMessage]);

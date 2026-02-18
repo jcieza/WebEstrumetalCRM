@@ -2,11 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const CLIENT_ID = process.env.GRAVATAR_CLIENT_ID;
 const CLIENT_SECRET = process.env.GRAVATAR_CLIENT_SECRET;
-const REDIRECT_URI = 'http://localhost:3000/api/auth/gravatar/callback';
+// Redir URI is constructed dynamically in the handler
 
 export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const code = searchParams.get('code');
+
+    const host = req.headers.get('host');
+    const protocol = host?.includes('localhost') ? 'http' : 'https';
+    const redirectUri = `${protocol}://${host}/api/auth/gravatar/callback`;
 
     if (!code) {
         return NextResponse.redirect(new URL('/crm/mail?gravatar_status=error&error=no_code', req.url));
@@ -23,7 +27,7 @@ export async function GET(req: NextRequest) {
                 client_secret: CLIENT_SECRET!,
                 code,
                 grant_type: 'authorization_code',
-                redirect_uri: REDIRECT_URI,
+                redirect_uri: redirectUri,
             }),
         });
 

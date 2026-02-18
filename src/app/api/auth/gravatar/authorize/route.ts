@@ -8,7 +8,11 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: 'Gravatar Client ID not configured' }, { status: 500 });
     }
 
-    const authUrl = `https://public-api.wordpress.com/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=auth+gravatar-profile:read+gravatar-profile:manage`;
+    const host = req.headers.get('host');
+    const protocol = host?.includes('localhost') ? 'http' : 'https';
+    const redirectUri = `${protocol}://${host}/api/auth/gravatar/callback`;
+
+    const authUrl = `https://public-api.wordpress.com/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=auth+gravatar-profile:read+gravatar-profile:manage`;
 
     return NextResponse.redirect(authUrl);
 }
