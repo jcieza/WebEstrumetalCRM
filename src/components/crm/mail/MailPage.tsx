@@ -49,9 +49,10 @@ const ESTRUMETAL_SIGNATURE = `
 // - [x] Update: Signature text to "Despacho de Oficina"
 // - [/] Comprehensive Overhaul: Fix structures (In Progress), HTML rendering, Multiple Recipients, Unread Counter, and Redesign Compose Modal.
 //     - [x] Phase 1: Logic Consolidation (Completed)
-import { getGravatarUrl } from '@/utils/gravatar';
+import { getGravatarUrl, initGravatarHovercards, openGravatarQuickEditor, getGravatarQRUrl } from '@/utils/gravatar';
 import GravatarHoverCard from './GravatarHoverCard';
 import GmailCompose from './GmailCompose';
+import { useSearchParams } from 'next/navigation';
 
 const GMAIL_THEME = {
     dark: {
@@ -100,7 +101,7 @@ const MailPage = () => {
     const [showMobileSidebar, setShowMobileSidebar] = useState(false);
     const [showMobileDetail, setShowMobileDetail] = useState(false);
     const [activeTab, setActiveTab] = useState<'mail' | 'meet'>('mail');
-    const [toasts, setToasts] = useState<{ id: number; type: 'success' | 'new'; message: string }[]>([]);
+    const [toasts, setToasts] = useState<{ id: number; type: 'success' | 'new' | 'info'; message: string }[]>([]);
 
     // Editor State
     const [senderAccount, setSenderAccount] = useState('ventas@ciaestrumetal.com');
@@ -129,13 +130,40 @@ const MailPage = () => {
         email: auth.currentUser?.email || '',
     });
 
-    const addToast = (type: 'success' | 'new', message: string) => {
+    const addToast = (type: 'success' | 'new' | 'info', message: string) => {
         const id = Date.now();
         setToasts(prev => [...prev, { id, type, message }]);
         setTimeout(() => {
             setToasts(prev => prev.filter(t => t.id !== id));
         }, 4000);
     };
+
+    const searchParams = useSearchParams();
+    const [gravatarToken, setGravatarToken] = useState<string | null>(null);
+
+    useEffect(() => {
+        // Init Hovercards
+        initGravatarHovercards();
+
+        // Handle URL Params for Toast
+        const gravatarStatus = searchParams.get('gravatar_status');
+        if (gravatarStatus === 'success') {
+            addToast('success', 'Gravatar vinculado correctamente');
+        } else if (gravatarStatus === 'error') {
+            const errorType = searchParams.get('error');
+            if (errorType === 'not_configured') {
+                addToast('info', 'Gravatar: Se requiere configuración de API');
+            } else {
+                addToast('info', 'Error al vincular Gravatar');
+            }
+        }
+
+        // Read Token from Cookie
+        const tokenMatch = document.cookie.match(/gravatar_token=([^;]+)/);
+        if (tokenMatch) {
+            setGravatarToken(tokenMatch[1]);
+        }
+    }, [searchParams]);
 
     const playSound = (type: 'send' | 'receive') => {
         const audio = new Audio(type === 'send' ? SEND_SOUND : RECEIVE_SOUND);
@@ -809,7 +837,8 @@ const MailPage = () => {
                                             <div className="flex-1 min-w-0 flex flex-col items-start gap-0.5">
                                                 <div className="flex justify-between w-full">
                                                     <span
-                                                        className={`text-base truncate tracking-tight`}
+                                                        className={`text-base truncate tracking-tight gravatar-hovercard`}
+                                                        data-gravatar-email={msg.from.includes('<') ? msg.from.split('<')[1].split('>')[0] : msg.from}
                                                         style={{
                                                             fontWeight: isUnread ? 700 : 400,
                                                             color: isUnread ? colors.textPrimary : colors.textSecondary
@@ -1478,14 +1507,34 @@ const MailPage = () => {
                                             <p className="text-[10px] font-black uppercase text-slate-400">Gravatar Social</p>
                                             <p className="text-[8px] font-bold text-slate-500">Vincular para bio y redes</p>
                                         </div>
-                                        <button
-                                            onClick={() => {
-                                                window.location.href = '/api/auth/gravatar/authorize';
-                                            }}
-                                            className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase transition-all ${theme === 'dark' ? 'bg-blue-600/20 text-blue-400 hover:bg-blue-600/30' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
-                                        >
-                                            Vincular Cuenta
-                                        </button>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => {
+                                                    window.open('https://gravatar.com/connect', '_blank');
+                                                }}
+                                                className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase transition-all ${theme === 'dark' ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                                            >
+                                                Crear Cuenta
+                                            </button>
+
+                                            {gravatarToken ? (
+                                                <button
+                                                    onClick={() => openGravatarQuickEditor(gravatarToken)}
+                                                    className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all bg-green-600/20 text-green-500 hover:bg-green-600/30`}
+                                                >
+                                                    Editar Perfil
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    onClick={() => {
+                                                        window.location.href = '/api/auth/gravatar/authorize';
+                                                    }}
+                                                    className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase transition-all ${theme === 'dark' ? 'bg-blue-600/20 text-blue-400 hover:bg-blue-600/30' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
+                                                >
+                                                    Vincular API
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1499,11 +1548,16 @@ const MailPage = () => {
                 {toasts.map(toast => (
                     <div
                         key={toast.id}
-                        className={`flex items-center gap-4 px-6 py-4 rounded-3xl shadow-2xl backdrop-blur-xl border border-white/20 animate-in slide-in-from-right fade-in duration-300 ${toast.type === 'success' ? 'bg-green-600/90 text-white' : 'bg-blue-600/90 text-white'}`}
+                        className={`flex items-center gap-4 px-6 py-4 rounded-3xl shadow-2xl backdrop-blur-xl border border-white/20 animate-in slide-in-from-right fade-in duration-300 ${toast.type === 'success' ? 'bg-green-600/90 text-white' :
+                            toast.type === 'info' ? 'bg-blue-500/90 text-white' :
+                                'bg-blue-600/90 text-white'
+                            }`}
                     >
                         {toast.type === 'success' ? <ShieldCheck size={20} /> : <Mail size={20} />}
                         <div>
-                            <p className="text-[10px] font-black uppercase tracking-widest">{toast.type === 'success' ? 'Éxito' : 'Notificación'}</p>
+                            <p className="text-[10px] font-black uppercase tracking-widest">
+                                {toast.type === 'success' ? 'Éxito' : toast.type === 'info' ? 'Info' : 'Notificación'}
+                            </p>
                             <p className="text-[12px] font-bold">{toast.message}</p>
                         </div>
                     </div>

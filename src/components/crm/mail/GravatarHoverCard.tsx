@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { fetchGravatarProfile, getGravatarUrl } from '@/utils/gravatar';
-import { Globe, Twitter, Github, Linkedin, MapPin, User, ExternalLink, Loader2 } from 'lucide-react';
+import { fetchGravatarProfile, getGravatarUrl, getGravatarQRUrl } from '@/utils/gravatar';
+import { Globe, Twitter, Github, Linkedin, MapPin, User, ExternalLink, Loader2, QrCode } from 'lucide-react';
 
 interface GravatarHoverCardProps {
     email: string;
@@ -90,6 +90,18 @@ const GravatarHoverCard: React.FC<GravatarHoverCardProps> = ({ email, theme }) =
                             <Globe size={16} />
                         </a>
                     ))}
+                    {/* QR Code Trigger */}
+                    <button
+                        onClick={async () => {
+                            const url = await getGravatarQRUrl(email);
+                            window.open(url, '_blank');
+                        }}
+                        className={`p-2 rounded-xl transition-all hover:scale-110 ${colors.surface} ${colors.textSecondary} hover:text-orange-500`}
+                        title="Ver Código QR del Perfil"
+                    >
+                        <QrCode size={16} />
+                    </button>
+
                     {/* Gravatar always has a profile link */}
                     <a
                         href={profile.profileUrl}

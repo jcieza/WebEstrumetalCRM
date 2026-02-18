@@ -30,7 +30,7 @@ interface CostItem {
     codigo?: string;
     descripcion: string;
     cantidad: number;
-    precioUnit: number;
+    precioUnit?: number;
     total: number;
     currency: 'PEN' | 'USD';
 }
@@ -75,7 +75,7 @@ const initialMateriales: MaterialItem[] = [
 ];
 
 const initialLabor: LaborItem[] = [
-    { id: 'l1', rol: 'Operarios Ensamblaje', descripcion: 'Ensamblaje', cantidad: 6, dias: 10, pagoDia: 65, total: 3900.00, currency: 'PEN' },
+    { id: 'l1', rol: 'Operarios Ensamblaje', descripcion: 'Mano de Obra Ensamblaje', cantidad: 6, dias: 10, pagoDia: 65, total: 3900.00, currency: 'PEN' },
 ];
 
 const initialExtraData: CostItem[] = [
@@ -131,17 +131,29 @@ export default function CostStructurePage() {
     }, [fabricacion, planchas, materiales, labor, extraData, exchangeRate, displayCurrency, isLoaded]);
 
     // --- Calculations ---
-    const totalFabPEN = useMemo(() => fabricacion.reduce((acc, item) => acc + item.total, 0), [fabricacion]);
-    const totalPlanchasUSD = useMemo(() => planchas.reduce((acc, item) => acc + item.total, 0), [planchas]);
-    const totalMatPEN = useMemo(() => materiales.reduce((acc, item) => acc + item.total, 0), [materiales]);
-    const totalLaborPEN = useMemo(() => labor.reduce((acc, item) => acc + item.total, 0), [labor]);
-    const totalExtraPEN = useMemo(() => extraData.reduce((acc, item) =>
-        acc + (item.currency === 'USD' ? item.total * exchangeRate : item.total), 0), [extraData, exchangeRate]);
-    const totalExtraUSD = useMemo(() => extraData.reduce((acc, item) =>
-        acc + (item.currency === 'PEN' ? item.total / exchangeRate : item.total), 0), [extraData, exchangeRate]);
+    const getSubtotal = (items: CostItem[], targetCurrency: 'PEN' | 'USD') => {
+        return items.reduce((acc, item) => {
+            if (item.currency === targetCurrency) return acc + item.total;
+            if (targetCurrency === 'PEN' && item.currency === 'USD') return acc + (item.total * exchangeRate);
+            if (targetCurrency === 'USD' && item.currency === 'PEN') return acc + (item.total / exchangeRate);
+            return acc + item.total;
+        }, 0);
+    };
 
-    const totalPEN = totalFabPEN + (totalPlanchasUSD * exchangeRate) + totalMatPEN + totalLaborPEN + totalExtraPEN;
-    const totalUSD = totalPEN / exchangeRate;
+    const totalFabPEN = useMemo(() => getSubtotal(fabricacion, 'PEN'), [fabricacion, exchangeRate]);
+    const totalPlanchasUSD = useMemo(() => getSubtotal(planchas, 'USD'), [planchas, exchangeRate]);
+    const totalMatPEN = useMemo(() => getSubtotal(materiales, 'PEN'), [materiales, exchangeRate]);
+    const totalLaborPEN = useMemo(() => getSubtotal(labor, 'PEN'), [labor, exchangeRate]);
+
+    // Extra data is special as it's truly mixed by nature in its original view
+    const totalExtraPEN = useMemo(() => getSubtotal(extraData, 'PEN'), [extraData, exchangeRate]);
+    const totalExtraUSD = useMemo(() => getSubtotal(extraData, 'USD'), [extraData, exchangeRate]);
+
+    const totalPEN = useMemo(() => {
+        return totalFabPEN + (totalPlanchasUSD * exchangeRate) + totalMatPEN + totalLaborPEN + totalExtraPEN;
+    }, [totalFabPEN, totalPlanchasUSD, totalMatPEN, totalLaborPEN, totalExtraPEN, exchangeRate]);
+
+    const totalUSD = useMemo(() => totalPEN / exchangeRate, [totalPEN, exchangeRate]);
 
     const mainTotal = displayCurrency === 'PEN' ? totalPEN : totalUSD;
 
@@ -156,6 +168,15 @@ export default function CostStructurePage() {
                     } else {
                         newItem.total = Number(newItem.cantidad) * Number(newItem.precioUnit);
                     }
+                }
+
+                // Handle currency swap logic
+                if (field === 'currency') {
+                    const factor = value === 'USD' ? (1 / exchangeRate) : exchangeRate;
+
+                    if (newItem.precioUnit !== undefined) newItem.precioUnit = item.precioUnit * factor;
+                    if (newItem.pagoDia !== undefined) newItem.pagoDia = item.pagoDia * factor;
+                    newItem.total = item.total * factor;
                 }
                 return newItem;
             }
@@ -314,7 +335,6 @@ export default function CostStructurePage() {
                     </div>
                     <GlassTable
                         data={planchas}
-                        currency="$"
                         columns={['Código', 'Descripción', 'Cant.', 'P. Unit (USD)', 'Total (USD)']}
                         onUpdate={(id, field, value) => updateItem(setPlanchas, id, field, value)}
                         primaryColor="#469F7A"
@@ -322,7 +342,7 @@ export default function CostStructurePage() {
                 </section>
 
                 {/* 3. Insumos y Labor Matrix */}
-                <div className="grid grid-cols-2 gap-10">
+                <div className="grid lg:grid-cols-2 gap-10">
                     <section className="space-y-4">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
@@ -408,14 +428,19 @@ export default function CostStructurePage() {
 
 // --- Helper UI Components ---
 
-function GlassTable({ data, columns, onUpdate, currency, primaryColor = '#1A1D21' }: any) {
+function GlassTable({ data, columns, onUpdate, primaryColor = '#1A1D21' }: {
+    data: any[],
+    columns: string[],
+    onUpdate: (id: string, field: string, value: any) => void,
+    primaryColor?: string
+}) {
     return (
-        <div className="bg-white/45 backdrop-blur-[25px] border border-white/80 rounded-[28px] overflow-hidden shadow-[0_8px_32px_0_rgba(31,38,135,0.07)]">
-            <table className="w-full text-left border-collapse">
+        <div className="bg-white/45 backdrop-blur-[25px] border border-white/80 rounded-[28px] shadow-[0_8px_32px_0_rgba(31,38,135,0.07)]">
+            <table className="w-full text-left border-collapse table-fixed">
                 <thead>
                     <tr className="bg-white/20 border-b border-white/50 text-[9px] uppercase font-black tracking-widest text-[#2D3436]/40">
-                        {columns.map((col: string) => (
-                            <th key={col} className="px-6 py-5 text-center first:text-left">{col}</th>
+                        {columns.map((col: string, i: number) => (
+                            <th key={col} className={`py-5 px-6 ${i === 0 ? 'w-[15%]' : i === 1 ? 'w-[40%]' : 'w-[15%] text-center'}`}>{col}</th>
                         ))}
                     </tr>
                 </thead>
@@ -423,38 +448,48 @@ function GlassTable({ data, columns, onUpdate, currency, primaryColor = '#1A1D21
                     {data.map((item: any) => (
                         <tr key={item.id} className="hover:bg-white/30 transition-colors">
                             <td className="px-6 py-5">
-                                <span className="text-[10px] font-black font-mono tracking-tighter opacity-60" style={{ color: primaryColor }}>
+                                <span
+                                    className="text-[10px] font-black font-mono tracking-tighter opacity-60 cursor-help"
+                                    style={{ color: primaryColor }}
+                                    title="Doble click para cambiar moneda"
+                                    onDoubleClick={() => onUpdate(item.id, 'currency', item.currency === 'USD' ? 'PEN' : 'USD')}
+                                >
                                     {item.currency === 'USD' ? '$' : (item.currency === 'PEN' ? 'S/' : (item.codigo || item.item || '-'))}
                                 </span>
                             </td>
-                            <td className="px-6 py-5 min-w-[300px]">
+                            <td className="px-6 py-5 overflow-hidden">
                                 <input
                                     type="text"
                                     value={item.descripcion || item.rol || ''}
                                     onChange={(e) => onUpdate(item.id, item.descripcion ? 'descripcion' : 'rol', e.target.value)}
-                                    className="bg-transparent border-none text-[12px] font-[600] w-full focus:outline-none"
+                                    className="bg-transparent border-none text-[12px] font-[600] w-full focus:outline-none truncate"
                                 />
                             </td>
-                            <td className="px-6 py-5">
+                            <td className="px-6 py-5 text-center">
                                 <input
                                     type="number"
                                     value={item.cantidad || 0}
                                     onChange={(e) => onUpdate(item.id, 'cantidad', parseFloat(e.target.value))}
-                                    className="w-20 mx-auto block bg-white/40 border border-white/80 rounded-[12px] px-3 py-2 text-center text-xs font-[800] focus:ring-2 focus:ring-white outline-none"
+                                    className="w-16 bg-white/40 border border-white/80 rounded-[10px] px-2 py-1.5 text-center text-[11px] font-[800] focus:ring-2 focus:ring-white outline-none"
                                 />
                             </td>
-                            <td className="px-6 py-5">
+                            <td className="px-6 py-5 text-center">
                                 <input
                                     type="number"
                                     step="0.01"
                                     value={item.precioUnit || item.pagoDia || item.dias || 0}
                                     onChange={(e) => onUpdate(item.id, item.precioUnit !== undefined ? 'precioUnit' : (item.pagoDia !== undefined ? 'pagoDia' : 'dias'), parseFloat(e.target.value))}
-                                    className="w-24 mx-auto block bg-white/40 border border-white/80 rounded-[12px] px-3 py-2 text-center text-xs font-[800] focus:ring-2 focus:ring-white outline-none"
+                                    className="w-20 bg-white/40 border border-white/80 rounded-[10px] px-2 py-1.5 text-center text-[11px] font-[800] focus:ring-2 focus:ring-white outline-none"
                                     style={{ color: primaryColor }}
                                 />
                             </td>
-                            <td className="px-6 py-5 text-right font-[800] text-sm tabular-nums">
-                                <span className="text-[10px] text-gray-400 mr-2">{currency || (item.currency === 'USD' ? '$' : 'S/')}</span>
+                            <td className="px-6 py-5 text-right font-[800] text-xs tabular-nums">
+                                <span
+                                    className="text-[9px] text-gray-400 mr-1.5 cursor-pointer hover:text-green-600 transition-colors"
+                                    onDoubleClick={() => onUpdate(item.id, 'currency', item.currency === 'USD' ? 'PEN' : 'USD')}
+                                >
+                                    {item.currency === 'USD' ? '$' : 'S/'}
+                                </span>
                                 {item.total.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                             </td>
                         </tr>

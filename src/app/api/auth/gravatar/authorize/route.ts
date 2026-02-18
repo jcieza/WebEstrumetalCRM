@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const CLIENT_ID = process.env.GRAVATAR_CLIENT_ID;
-const REDIRECT_URI = 'http://localhost:3000/api/auth/gravatar/callback';
 
 export async function GET(req: NextRequest) {
     if (!CLIENT_ID) {
-        return NextResponse.json({ error: 'Gravatar Client ID not configured' }, { status: 500 });
+        console.error('GRAVATAR_CLIENT_ID is not configured in environment variables.');
+        return NextResponse.redirect(new URL('/crm/mail?gravatar_status=error&error=not_configured', req.url));
     }
 
     const host = req.headers.get('host');
