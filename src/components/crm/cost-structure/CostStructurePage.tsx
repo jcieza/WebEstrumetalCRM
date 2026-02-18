@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
     Calculator,
     Layers,
@@ -17,7 +17,8 @@ import {
     Trash2,
     Info,
     ShieldCheck,
-    Coins
+    Coins,
+    RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -25,31 +26,23 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 interface CostItem {
     id: string;
-    item: string;
-    codigo: string;
+    item?: string;
+    codigo?: string;
     descripcion: string;
     cantidad: number;
     precioUnit: number;
     total: number;
-    currency?: 'PEN' | 'USD';
+    currency: 'PEN' | 'USD';
 }
 
-interface MaterialItem {
-    id: string;
-    descripcion: string;
-    cantidad: number;
+interface MaterialItem extends CostItem {
     unidad: string;
-    precioUnit: number;
-    total: number;
 }
 
-interface LaborItem {
-    id: string;
+interface LaborItem extends CostItem {
     rol: string;
-    cantidad: number;
     dias: number;
     pagoDia: number;
-    total: number;
 }
 
 // --- Initial Data ---
@@ -75,14 +68,21 @@ const initialPlanchas: CostItem[] = [
 ];
 
 const initialMateriales: MaterialItem[] = [
-    { id: 'm1', descripcion: 'Alambre Diámetro 2.30', cantidad: 5092, unidad: 'kg', precioUnit: 1.25, total: 6365.00 },
-    { id: 'm2', descripcion: 'Alambre Diámetro 10', cantidad: 2899, unidad: 'kg', precioUnit: 1.15, total: 3333.85 },
-    { id: 'm3', descripcion: 'Alambre Diámetro 3 mm', cantidad: 412, unidad: 'kg', precioUnit: 1.35, total: 556.20 },
-    { id: 'm4', descripcion: 'Alambre Diámetro 8', cantidad: 408, unidad: 'kg', precioUnit: 1.20, total: 489.60 },
+    { id: 'm1', descripcion: 'Alambre Diámetro 2.30', unidad: 'kg', cantidad: 5092, precioUnit: 1.25, total: 6365.00, currency: 'PEN' },
+    { id: 'm2', descripcion: 'Alambre Diámetro 10', unidad: 'kg', cantidad: 2899, precioUnit: 1.15, total: 3333.85, currency: 'PEN' },
+    { id: 'm3', descripcion: 'Alambre Diámetro 3 mm', unidad: 'kg', cantidad: 412, precioUnit: 1.35, total: 556.20, currency: 'PEN' },
+    { id: 'm4', descripcion: 'Alambre Diámetro 8', unidad: 'kg', cantidad: 408, precioUnit: 1.20, total: 489.60, currency: 'PEN' },
 ];
 
 const initialLabor: LaborItem[] = [
-    { id: 'l1', rol: 'Operarios Ensamblaje', cantidad: 6, dias: 10, pagoDia: 65, total: 3900.00 },
+    { id: 'l1', rol: 'Operarios Ensamblaje', descripcion: 'Ensamblaje', cantidad: 6, dias: 10, pagoDia: 65, total: 3900.00, currency: 'PEN' },
+];
+
+const initialExtraData: CostItem[] = [
+    { id: 'e1', descripcion: 'Nipples', cantidad: 824, precioUnit: 1.9, total: 1565.6, currency: 'USD' },
+    { id: 'e2', descripcion: 'Tubos', cantidad: 417, precioUnit: 4.9, total: 2043.3, currency: 'USD' },
+    { id: 'e3', descripcion: 'Armado', cantidad: 1, precioUnit: 5000, total: 5000, currency: 'PEN' },
+    { id: 'e4', descripcion: 'Regulares', cantidad: 4, precioUnit: 115, total: 460, currency: 'PEN' },
 ];
 
 export default function CostStructurePage() {
@@ -90,15 +90,60 @@ export default function CostStructurePage() {
     const [planchas, setPlanchas] = useState<CostItem[]>(initialPlanchas);
     const [materiales, setMateriales] = useState<MaterialItem[]>(initialMateriales);
     const [labor, setLabor] = useState<LaborItem[]>(initialLabor);
+    const [extraData, setExtraData] = useState<CostItem[]>(initialExtraData);
     const [exchangeRate, setExchangeRate] = useState(3.75);
+    const [displayCurrency, setDisplayCurrency] = useState<'PEN' | 'USD'>('PEN');
+    const [isLoaded, setIsLoaded] = useState(false);
+
+    // --- Persistence ---
+    useEffect(() => {
+        const saved = localStorage.getItem('cost_structure_data_v3');
+        if (saved) {
+            try {
+                const data = JSON.parse(saved);
+                if (data.fabricacion) setFabricacion(data.fabricacion);
+                if (data.planchas) setPlanchas(data.planchas);
+                if (data.materiales) setMateriales(data.materiales);
+                if (data.labor) setLabor(data.labor);
+                if (data.extraData) setExtraData(data.extraData);
+                if (data.exchangeRate) setExchangeRate(data.exchangeRate);
+                if (data.displayCurrency) setDisplayCurrency(data.displayCurrency);
+            } catch (e) {
+                console.error("Error loading saved data", e);
+            }
+        }
+        setIsLoaded(true);
+    }, []);
+
+    useEffect(() => {
+        if (isLoaded) {
+            const data = {
+                fabricacion,
+                planchas,
+                materiales,
+                labor,
+                extraData,
+                exchangeRate,
+                displayCurrency
+            };
+            localStorage.setItem('cost_structure_data_v3', JSON.stringify(data));
+        }
+    }, [fabricacion, planchas, materiales, labor, extraData, exchangeRate, displayCurrency, isLoaded]);
 
     // --- Calculations ---
     const totalFabPEN = useMemo(() => fabricacion.reduce((acc, item) => acc + item.total, 0), [fabricacion]);
     const totalPlanchasUSD = useMemo(() => planchas.reduce((acc, item) => acc + item.total, 0), [planchas]);
     const totalMatPEN = useMemo(() => materiales.reduce((acc, item) => acc + item.total, 0), [materiales]);
     const totalLaborPEN = useMemo(() => labor.reduce((acc, item) => acc + item.total, 0), [labor]);
+    const totalExtraPEN = useMemo(() => extraData.reduce((acc, item) =>
+        acc + (item.currency === 'USD' ? item.total * exchangeRate : item.total), 0), [extraData, exchangeRate]);
+    const totalExtraUSD = useMemo(() => extraData.reduce((acc, item) =>
+        acc + (item.currency === 'PEN' ? item.total / exchangeRate : item.total), 0), [extraData, exchangeRate]);
 
-    const totalPEN = totalFabPEN + (totalPlanchasUSD * exchangeRate) + totalMatPEN + totalLaborPEN;
+    const totalPEN = totalFabPEN + (totalPlanchasUSD * exchangeRate) + totalMatPEN + totalLaborPEN + totalExtraPEN;
+    const totalUSD = totalPEN / exchangeRate;
+
+    const mainTotal = displayCurrency === 'PEN' ? totalPEN : totalUSD;
 
     // --- Handlers ---
     const updateItem = (setter: any, id: string, field: string, value: any) => {
@@ -106,7 +151,7 @@ export default function CostStructurePage() {
             if (item.id === id) {
                 const newItem = { ...item, [field]: value };
                 if (field === 'cantidad' || field === 'precioUnit' || field === 'dias' || field === 'pagoDia') {
-                    if (item.rol) { // Labor
+                    if (newItem.rol) { // Labor
                         newItem.total = Number(newItem.cantidad) * Number(newItem.dias) * Number(newItem.pagoDia);
                     } else {
                         newItem.total = Number(newItem.cantidad) * Number(newItem.precioUnit);
@@ -119,7 +164,11 @@ export default function CostStructurePage() {
     };
 
     const goBack = () => {
-        window.location.reload(); // Simple way to trigger Layout change back if needed, or we could lift state
+        window.location.reload();
+    };
+
+    const toggleCurrency = () => {
+        setDisplayCurrency(prev => prev === 'PEN' ? 'USD' : 'PEN');
     };
 
     return (
@@ -158,22 +207,31 @@ export default function CostStructurePage() {
                         </div>
                     </div>
 
-                    <div className="bg-white/60 p-4 rounded-[22px] border border-white/80 shadow-[0_10px_30px_rgba(0,0,0,0.05)] flex items-center gap-6">
+                    <button
+                        onClick={toggleCurrency}
+                        className="bg-white/60 p-4 rounded-[22px] border border-white/80 shadow-[0_10px_30px_rgba(0,0,0,0.05)] flex items-center gap-6 group hover:bg-white/80 transition-all"
+                    >
                         <div className="text-right">
-                            <span className="text-[9px] uppercase font-black text-gray-400 tracking-widest block">Total PEN</span>
-                            <span className="text-2xl font-[800] tracking-tighter">S/ {totalPEN.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                            <span className="text-[9px] uppercase font-black text-gray-400 tracking-widest block group-hover:text-[#469F7A] transition-colors text-right">
+                                Total {displayCurrency} <span className="text-[8px]">(Click para toggle)</span>
+                            </span>
+                            <span className="text-2xl font-[800] tracking-tighter flex items-center gap-2">
+                                {displayCurrency === 'PEN' ? 'S/' : '$'} {mainTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                <RefreshCw size={14} className="text-[#469F7A] opacity-40 group-hover:rotate-180 transition-transform duration-500" />
+                            </span>
                         </div>
-                    </div>
+                    </button>
                 </div>
             </header>
 
             {/* Content Body */}
-            <main className="pt-32 pb-20 px-10 max-w-7xl mx-auto space-y-12">
+            <main className="pt-32 pb-40 px-10 max-w-7xl mx-auto space-y-12">
 
                 {/* Summary Cards */}
-                <div className="grid grid-cols-4 gap-6">
+                <div className="grid grid-cols-5 gap-6">
                     {[
                         { label: 'Fabricación Local', value: totalFabPEN, currency: 'S/', color: '#1A1D21' },
+                        { label: 'Otros / Extras', value: displayCurrency === 'PEN' ? totalExtraPEN : totalExtraUSD, currency: displayCurrency === 'PEN' ? 'S/' : '$', color: '#12C2E9' },
                         { label: 'Planchas (P.O.)', value: totalPlanchasUSD, currency: '$', color: '#469F7A' },
                         { label: 'Insumos Alambre', value: totalMatPEN, currency: 'S/', color: '#00C38B' },
                         { label: 'Mano de Obra', value: totalLaborPEN, currency: 'S/', color: '#FF7043' },
@@ -191,7 +249,7 @@ export default function CostStructurePage() {
                             <span className="text-[10px] uppercase font-black tracking-widest text-gray-400 mb-2 block">{stat.label}</span>
                             <div className="flex items-baseline gap-1">
                                 <span className="text-xs font-bold" style={{ color: stat.color }}>{stat.currency}</span>
-                                <span className="text-3xl font-[800] tracking-tight">{stat.value.toLocaleString()}</span>
+                                <span className="text-2xl font-[800] tracking-tight">{stat.value.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                             </div>
                         </motion.div>
                     ))}
@@ -199,9 +257,15 @@ export default function CostStructurePage() {
 
                 {/* 1. Fabricación Table */}
                 <section className="space-y-4">
-                    <div className="flex items-center gap-3">
-                        <Package className="text-[#1A1D21]" size={24} />
-                        <h2 className="text-lg font-[800] uppercase tracking-tighter italic">Reconstrucción de Fabricación (Alambre)</h2>
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <Package className="text-[#1A1D21]" size={24} />
+                            <h2 className="text-lg font-[800] uppercase tracking-tighter italic">Fabricación Alambre</h2>
+                        </div>
+                        <div className="text-right">
+                            <span className="text-[9px] uppercase font-black text-gray-400 tracking-widest block">Subtotal</span>
+                            <span className="text-xl font-black text-[#1A1D21]">S/ {totalFabPEN.toLocaleString()}</span>
+                        </div>
                     </div>
                     <GlassTable
                         data={fabricacion}
@@ -210,21 +274,44 @@ export default function CostStructurePage() {
                     />
                 </section>
 
-                {/* 2. Planchas Section (THE ONE TO CAUTION) */}
+                {/* Otros Gastos Table */}
+                <section className="space-y-4">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <Calculator className="text-[#12C2E9]" size={24} />
+                            <h2 className="text-lg font-[800] uppercase tracking-tighter italic">Complementos y Gastos Extra</h2>
+                        </div>
+                        <div className="text-right">
+                            <span className="text-[9px] uppercase font-black text-gray-400 tracking-widest block">Subtotal (PEN)</span>
+                            <span className="text-xl font-black text-[#12C2E9]">S/ {totalExtraPEN.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                        </div>
+                    </div>
+                    <GlassTable
+                        data={extraData}
+                        columns={['Tipo', 'Descripción', 'Cant.', 'P. Unit', 'Total']}
+                        onUpdate={(id, field, value) => updateItem(setExtraData, id, field, value)}
+                        primaryColor="#12C2E9"
+                    />
+                </section>
+
+                {/* 2. Planchas Section */}
                 <section className="space-y-4">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                             <Layers className="text-[#469F7A]" size={24} />
-                            <h2 className="text-lg font-[800] uppercase tracking-tighter italic">Sección Planchas y Accesorios (USD)</h2>
+                            <h2 className="text-lg font-[800] uppercase tracking-tighter italic">Sección Planchas (USD)</h2>
                         </div>
-                        <div className="bg-[#469F7A]/10 px-4 py-2 rounded-full border border-[#469F7A]/20 flex items-center gap-2">
-                            <Info size={14} className="text-[#469F7A]" />
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-[#469F7A]">No requiere cambios frecuentes</span>
+                        <div className="flex items-center gap-8">
+                            <div className="bg-[#469F7A]/10 px-4 py-2 rounded-full border border-[#469F7A]/20 flex items-center gap-2">
+                                <Info size={14} className="text-[#469F7A]" />
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-[#469F7A]">No requiere cambios frecuentes</span>
+                            </div>
+                            <div className="text-right">
+                                <span className="text-[9px] uppercase font-black text-gray-400 tracking-widest block">Subtotal</span>
+                                <span className="text-xl font-black text-[#469F7A]">$ {totalPlanchasUSD.toLocaleString()}</span>
+                            </div>
                         </div>
                     </div>
-                    <p className="text-[11px] text-gray-500 font-medium max-w-2xl leading-relaxed">
-                        Estos items corresponden al sistema de comederos y fijaciones fabricados con plancha galvanizada. Se incluyen por completitud de la O.C. 4520065767 pero no afectan el análisis de costos de trefilería de Prodac.
-                    </p>
                     <GlassTable
                         data={planchas}
                         currency="$"
@@ -237,9 +324,15 @@ export default function CostStructurePage() {
                 {/* 3. Insumos y Labor Matrix */}
                 <div className="grid grid-cols-2 gap-10">
                     <section className="space-y-4">
-                        <div className="flex items-center gap-3">
-                            <TrendingUp className="text-[#00C38B]" size={24} />
-                            <h2 className="text-lg font-[800] uppercase tracking-tighter italic">Materia Prima Alambre (KG)</h2>
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <TrendingUp className="text-[#00C38B]" size={24} />
+                                <h2 className="text-lg font-[800] uppercase tracking-tighter italic">Materia Prima Alambres</h2>
+                            </div>
+                            <div className="text-right">
+                                <span className="text-[9px] uppercase font-black text-gray-400 tracking-widest block">Subtotal</span>
+                                <span className="text-xl font-black text-[#00C38B]">S/ {totalMatPEN.toLocaleString()}</span>
+                            </div>
                         </div>
                         <GlassTable
                             data={materiales}
@@ -250,9 +343,15 @@ export default function CostStructurePage() {
                     </section>
 
                     <section className="space-y-4">
-                        <div className="flex items-center gap-3">
-                            <UsersIcon className="text-[#FF7043]" size={24} />
-                            <h2 className="text-lg font-[800] uppercase tracking-tighter italic">Mano de Obra Estimada</h2>
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <UsersIcon className="text-[#FF7043]" size={24} />
+                                <h2 className="text-lg font-[800] uppercase tracking-tighter italic">Mano de Obra Estrumetal</h2>
+                            </div>
+                            <div className="text-right">
+                                <span className="text-[9px] uppercase font-black text-gray-400 tracking-widest block">Subtotal</span>
+                                <span className="text-xl font-black text-[#FF7043]">S/ {totalLaborPEN.toLocaleString()}</span>
+                            </div>
                         </div>
                         <GlassTable
                             data={labor}
@@ -263,29 +362,42 @@ export default function CostStructurePage() {
                     </section>
                 </div>
 
-                {/* Data Security Footer */}
-                <div className="bg-[#1A1D21] p-10 rounded-[32px] text-white flex justify-between items-center shadow-2xl relative overflow-hidden">
-                    <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
-                        <div className="w-full h-full bg-[radial-gradient(circle_at_20%_20%,#469F7A_0%,transparent_50%)]" />
-                    </div>
-                    <div>
-                        <div className="flex items-center gap-3 mb-2">
-                            <ShieldCheck className="text-[#469F7A]" size={20} />
-                            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-[#469F7A]">Auditoría Segura</span>
-                        </div>
-                        <h3 className="text-2xl font-[800] tracking-tighter uppercase italic">Resumen de Instrucciones Legales</h3>
-                        <ul className="mt-4 grid grid-cols-2 gap-4 text-[10px] uppercase font-bold text-white/50 tracking-widest">
-                            <li>• Atención L-V 8:00 AM - 4:30 PM</li>
-                            <li>• Gestión vía Portal Web de Proveedores</li>
-                            <li>• Agente de Retención (3% > S/ 700)</li>
-                            <li>• Facturación máx. 26 del mes</li>
-                        </ul>
+                {/* Grand Total End View */}
+                <div className="bg-[#1A1D21] p-12 rounded-[40px] text-white flex justify-between items-center shadow-2xl relative overflow-hidden border border-white/10">
+                    <div className="absolute top-0 left-0 w-full h-full opacity-20 pointer-events-none">
+                        <div className="w-full h-full bg-[radial-gradient(circle_at_80%_80%,#469F7A_0%,transparent_50%)]" />
+                        <div className="w-full h-full bg-[radial-gradient(circle_at_20%_20%,#12C2E9_0%,transparent_50%)]" />
                     </div>
 
-                    <div className="text-right">
-                        <button className="bg-white text-[#1A1D21] px-10 py-4 rounded-[20px] font-black uppercase tracking-tighter text-xs hover:scale-105 transition-all shadow-white/20 shadow-2xl flex items-center gap-3">
-                            <Save size={18} />
-                            Exportar Estructura Consolidada
+                    <div className="relative z-10">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="bg-[#469F7A] p-2 rounded-[10px]">
+                                <ShieldCheck size={20} className="text-white" />
+                            </div>
+                            <span className="text-xs font-black uppercase tracking-[0.4em] text-[#469F7A]">Análisis Final Consolidado</span>
+                        </div>
+                        <h3 className="text-4xl font-[900] tracking-tighter uppercase italic leading-none mb-2">PRODAC ESTRUCTURA 2025</h3>
+                        <p className="text-white/40 text-[10px] uppercase font-bold tracking-widest max-w-md">
+                            Este documento digital es privado. La edición en tiempo real está activa y los cambios se guardan localmente para auditoría inmediata.
+                        </p>
+                    </div>
+
+                    <div className="text-right relative z-10">
+                        <div className="mb-6">
+                            <button
+                                onClick={toggleCurrency}
+                                className="text-[10px] uppercase font-black text-[#469F7A] tracking-[0.2em] mb-2 hover:opacity-80 transition-opacity"
+                            >
+                                Cambiar a {displayCurrency === 'PEN' ? 'Dólares' : 'Soles'}
+                            </button>
+                            <div className="text-6xl font-[900] tracking-tighter items-baseline gap-2">
+                                <span className="text-2xl font-bold mr-2 text-white/50">{displayCurrency === 'PEN' ? 'S/' : '$'}</span>
+                                {mainTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            </div>
+                        </div>
+                        <button className="bg-white text-[#1A1D21] px-12 py-5 rounded-[24px] font-black uppercase tracking-tighter text-sm hover:scale-105 transition-all shadow-white/20 shadow-2xl flex items-center gap-4 ml-auto">
+                            <Save size={20} />
+                            Guardar y Cerrar Auditoría
                         </button>
                     </div>
                 </div>
@@ -296,14 +408,14 @@ export default function CostStructurePage() {
 
 // --- Helper UI Components ---
 
-function GlassTable({ data, columns, onUpdate, currency = 'S/', primaryColor = '#1A1D21' }: any) {
+function GlassTable({ data, columns, onUpdate, currency, primaryColor = '#1A1D21' }: any) {
     return (
         <div className="bg-white/45 backdrop-blur-[25px] border border-white/80 rounded-[28px] overflow-hidden shadow-[0_8px_32px_0_rgba(31,38,135,0.07)]">
             <table className="w-full text-left border-collapse">
                 <thead>
                     <tr className="bg-white/20 border-b border-white/50 text-[9px] uppercase font-black tracking-widest text-[#2D3436]/40">
                         {columns.map((col: string) => (
-                            <th key={col} className="px-6 py-5">{col}</th>
+                            <th key={col} className="px-6 py-5 text-center first:text-left">{col}</th>
                         ))}
                     </tr>
                 </thead>
@@ -311,12 +423,14 @@ function GlassTable({ data, columns, onUpdate, currency = 'S/', primaryColor = '
                     {data.map((item: any) => (
                         <tr key={item.id} className="hover:bg-white/30 transition-colors">
                             <td className="px-6 py-5">
-                                <span className="text-[10px] font-black font-mono tracking-tighter opacity-60" style={{ color: primaryColor }}>{item.codigo || item.unidad || item.cantidad}</span>
+                                <span className="text-[10px] font-black font-mono tracking-tighter opacity-60" style={{ color: primaryColor }}>
+                                    {item.currency === 'USD' ? '$' : (item.currency === 'PEN' ? 'S/' : (item.codigo || item.item || '-'))}
+                                </span>
                             </td>
-                            <td className="px-6 py-5">
+                            <td className="px-6 py-5 min-w-[300px]">
                                 <input
                                     type="text"
-                                    value={item.descripcion || item.rol || item.insumo}
+                                    value={item.descripcion || item.rol || ''}
                                     onChange={(e) => onUpdate(item.id, item.descripcion ? 'descripcion' : 'rol', e.target.value)}
                                     className="bg-transparent border-none text-[12px] font-[600] w-full focus:outline-none"
                                 />
@@ -324,23 +438,23 @@ function GlassTable({ data, columns, onUpdate, currency = 'S/', primaryColor = '
                             <td className="px-6 py-5">
                                 <input
                                     type="number"
-                                    value={item.cantidad || item.pers}
-                                    onChange={(e) => onUpdate(item.id, item.cantidad ? 'cantidad' : 'pers', parseFloat(e.target.value))}
-                                    className="w-20 bg-white/40 border border-white/80 rounded-[12px] px-3 py-2 text-center text-xs font-[800] focus:ring-2 focus:ring-white outline-none"
+                                    value={item.cantidad || 0}
+                                    onChange={(e) => onUpdate(item.id, 'cantidad', parseFloat(e.target.value))}
+                                    className="w-20 mx-auto block bg-white/40 border border-white/80 rounded-[12px] px-3 py-2 text-center text-xs font-[800] focus:ring-2 focus:ring-white outline-none"
                                 />
                             </td>
                             <td className="px-6 py-5">
                                 <input
                                     type="number"
                                     step="0.01"
-                                    value={item.precioUnit || item.pagoDia || item.dias}
-                                    onChange={(e) => onUpdate(item.id, item.precioUnit ? 'precioUnit' : (item.pagoDia ? 'pagoDia' : 'dias'), parseFloat(e.target.value))}
-                                    className="w-24 bg-white/40 border border-white/80 rounded-[12px] px-3 py-2 text-center text-xs font-[800] focus:ring-2 focus:ring-white outline-none"
+                                    value={item.precioUnit || item.pagoDia || item.dias || 0}
+                                    onChange={(e) => onUpdate(item.id, item.precioUnit !== undefined ? 'precioUnit' : (item.pagoDia !== undefined ? 'pagoDia' : 'dias'), parseFloat(e.target.value))}
+                                    className="w-24 mx-auto block bg-white/40 border border-white/80 rounded-[12px] px-3 py-2 text-center text-xs font-[800] focus:ring-2 focus:ring-white outline-none"
                                     style={{ color: primaryColor }}
                                 />
                             </td>
                             <td className="px-6 py-5 text-right font-[800] text-sm tabular-nums">
-                                <span className="text-[10px] text-gray-400 mr-2">{currency}</span>
+                                <span className="text-[10px] text-gray-400 mr-2">{currency || (item.currency === 'USD' ? '$' : 'S/')}</span>
                                 {item.total.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                             </td>
                         </tr>
