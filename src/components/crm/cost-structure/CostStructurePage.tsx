@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
     Calculator,
     Layers,
@@ -10,13 +10,16 @@ import {
     DollarSign,
     Package,
     ArrowRightLeft,
-    ChevronDown,
+    ChevronLeft,
     Save,
     RotateCcw,
     Plus,
-    Trash2
+    Trash2,
+    Info,
+    ShieldCheck,
+    Coins
 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
 // --- Types ---
 
@@ -28,8 +31,7 @@ interface CostItem {
     cantidad: number;
     precioUnit: number;
     total: number;
-    fecha?: string;
-    sem?: string;
+    currency?: 'PEN' | 'USD';
 }
 
 interface MaterialItem {
@@ -52,22 +54,31 @@ interface LaborItem {
 
 // --- Initial Data ---
 
-const initialProdacItems: CostItem[] = [
-    { id: '1', item: '10', codigo: '1102730', descripcion: 'MSOLD BZ VX2-3.4-0.84X2.4M DOB-TECHO MAQ', cantidad: 824, precioUnit: 0.7000, total: 576.80, fecha: '17/03/2025', sem: '12' },
-    { id: '2', item: '20', codigo: '1102807', descripcion: 'MALLA S BZ2 VX1-2.3-1.055X2.4MDOB PIS MQ', cantidad: 824, precioUnit: 0.8000, total: 659.20, fecha: '17/03/2025', sem: '12' },
-    { id: '3', item: '30', codigo: '1102731', descripcion: 'MALLA S BZ2 VXV-2.3-0.39X0.51MCRT-DIV MQ', cantidad: 4120, precioUnit: 0.2600, total: 1071.20, fecha: '17/03/2024', sem: '11' },
-    { id: '4', item: '40', codigo: '1102732', descripcion: 'PUERTAS P/MOD JAULA POST', cantidad: 3296, precioUnit: 0.2300, total: 758.08, fecha: '17/03/2025', sem: '12' },
-    { id: '5', item: '50', codigo: '1102733', descripcion: 'TEMPLADOR P/MODULO JAULA POST', cantidad: 618, precioUnit: 0.1400, total: 86.52, fecha: '17/03/2025', sem: '12' },
-    { id: '6', item: '60', codigo: '1102734', descripcion: 'TEMPLADOR DE PISO P/MOD JAULA POST', cantidad: 3296, precioUnit: 0.2700, total: 889.92, fecha: '17/03/2025', sem: '12' },
-    { id: '7', item: '70', codigo: '1102736', descripcion: 'SOPORTE D/TUBERIA P/MOD JAULA POST', cantidad: 2472, precioUnit: 0.2200, total: 543.84, fecha: '17/03/2025', sem: '12' },
+const initialFabricacion: CostItem[] = [
+    { id: 'f1', item: '10', codigo: '1102730', descripcion: 'MSOLD BZ VX2-3.4-0.84X2.4M DOB-TECHO MAQ', cantidad: 824, precioUnit: 0.70, total: 576.80, currency: 'PEN' },
+    { id: 'f2', item: '20', codigo: '1102807', descripcion: 'MALLA S BZ2 VX1-2.3-1.055X2.4MDOB PIS MQ', cantidad: 824, precioUnit: 0.80, total: 659.20, currency: 'PEN' },
+    { id: 'f3', item: '30', codigo: '1102731', descripcion: 'MALLA S BZ2 VXV-2.3-0.39X0.51MCRT-DIV MQ', cantidad: 4120, precioUnit: 0.26, total: 1071.20, currency: 'PEN' },
+    { id: 'f4', item: '40', codigo: '1102732', descripcion: 'PUERTAS P/MOD JAULA POST', cantidad: 3296, precioUnit: 0.23, total: 758.08, currency: 'PEN' },
+    { id: 'f5', item: '50', codigo: '1102733', descripcion: 'TEMPLADOR P/MODULO JAULA POST', cantidad: 618, precioUnit: 0.14, total: 86.52, currency: 'PEN' },
+    { id: 'f6', item: '60', codigo: '1102734', descripcion: 'TEMPLADOR DE PISO P/MOD JAULA POST', cantidad: 3296, precioUnit: 0.27, total: 889.92, currency: 'PEN' },
+    { id: 'f7', item: '70', codigo: '1102736', descripcion: 'SOPORTE D/TUBERIA P/MOD JAULA POST', cantidad: 2472, precioUnit: 0.22, total: 543.84, currency: 'PEN' },
+];
+
+const initialPlanchas: CostItem[] = [
+    { id: 'p1', item: '10', codigo: '1004045', descripcion: 'COMEDERO LINEAL DE JAULA AVICOLA EST.', cantidad: 824, precioUnit: 8.80, total: 7251.20, currency: 'USD' },
+    { id: 'p2', item: '20', codigo: '1004044', descripcion: 'SUJETADOR D/PLANCHA COMEDERO LINEAL EST.', cantidad: 4120, precioUnit: 0.05, total: 206.00, currency: 'USD' },
+    { id: 'p3', item: '30', codigo: '1003885', descripcion: 'UNION COMEDERO 1.15 MM GALV P/JAULA AVI', cantidad: 888, precioUnit: 0.98, total: 870.24, currency: 'USD' },
+    { id: 'p4', item: '40', codigo: '1003884', descripcion: 'TAPA COMEDERO 0.80MM GALV P/JAULA AVIC', cantidad: 128, precioUnit: 0.98, total: 125.44, currency: 'USD' },
+    { id: 'p5', item: '50', codigo: '1004042', descripcion: 'GRAPA DE PLANCHA PARA UNION DE PISOS', cantidad: 2472, precioUnit: 0.06, total: 148.32, currency: 'USD' },
+    { id: 'p6', item: '60', codigo: '1004043', descripcion: 'SUJETADOR DE TEMPLADOR DE JAULA', cantidad: 1854, precioUnit: 0.05, total: 92.70, currency: 'USD' },
+    { id: 'p7', item: '70', codigo: '1005149', descripcion: 'ALAMBRE PROTECTOR DE CAIDA DE HUEVO', cantidad: 128, precioUnit: 0.70, total: 89.60, currency: 'USD' },
 ];
 
 const initialMateriales: MaterialItem[] = [
-    { id: 'm1', descripcion: 'Alambre Diametro 2.30', cantidad: 5092, unidad: 'kg', precioUnit: 1.25, total: 6365.00 },
-    { id: 'm2', descripcion: 'Alambre Diametro 10', cantidad: 2899, unidad: 'kg', precioUnit: 1.15, total: 3333.85 },
-    { id: 'm3', descripcion: 'Alambre Diametro 3 mm', cantidad: 412, unidad: 'kg', precioUnit: 1.35, total: 556.20 },
-    { id: 'm4', descripcion: 'Alambre Diametro 8', cantidad: 408, unidad: 'kg', precioUnit: 1.20, total: 489.60 },
-    { id: 'm5', descripcion: 'Nipples (Mercado)', cantidad: 824, unidad: 'un', precioUnit: 0.45, total: 370.80 },
+    { id: 'm1', descripcion: 'Alambre Diámetro 2.30', cantidad: 5092, unidad: 'kg', precioUnit: 1.25, total: 6365.00 },
+    { id: 'm2', descripcion: 'Alambre Diámetro 10', cantidad: 2899, unidad: 'kg', precioUnit: 1.15, total: 3333.85 },
+    { id: 'm3', descripcion: 'Alambre Diámetro 3 mm', cantidad: 412, unidad: 'kg', precioUnit: 1.35, total: 556.20 },
+    { id: 'm4', descripcion: 'Alambre Diámetro 8', cantidad: 408, unidad: 'kg', precioUnit: 1.20, total: 489.60 },
 ];
 
 const initialLabor: LaborItem[] = [
@@ -75,25 +86,31 @@ const initialLabor: LaborItem[] = [
 ];
 
 export default function CostStructurePage() {
-    const [costItems, setCostItems] = useState<CostItem[]>(initialProdacItems);
-    const [materialItems, setMaterialItems] = useState<MaterialItem[]>(initialMateriales);
-    const [laborItems, setLaborItems] = useState<LaborItem[]>(initialLabor);
+    const [fabricacion, setFabricacion] = useState<CostItem[]>(initialFabricacion);
+    const [planchas, setPlanchas] = useState<CostItem[]>(initialPlanchas);
+    const [materiales, setMateriales] = useState<MaterialItem[]>(initialMateriales);
+    const [labor, setLabor] = useState<LaborItem[]>(initialLabor);
+    const [exchangeRate, setExchangeRate] = useState(3.75);
 
     // --- Calculations ---
+    const totalFabPEN = useMemo(() => fabricacion.reduce((acc, item) => acc + item.total, 0), [fabricacion]);
+    const totalPlanchasUSD = useMemo(() => planchas.reduce((acc, item) => acc + item.total, 0), [planchas]);
+    const totalMatPEN = useMemo(() => materiales.reduce((acc, item) => acc + item.total, 0), [materiales]);
+    const totalLaborPEN = useMemo(() => labor.reduce((acc, item) => acc + item.total, 0), [labor]);
 
-    const totalFabricacion = useMemo(() => costItems.reduce((acc, item) => acc + item.total, 0), [costItems]);
-    const totalMateriales = useMemo(() => materialItems.reduce((acc, item) => acc + item.total, 0), [materialItems]);
-    const totalLabor = useMemo(() => laborItems.reduce((acc, item) => acc + item.total, 0), [laborItems]);
-    const totalGeneral = totalFabricacion + totalMateriales + totalLabor;
+    const totalPEN = totalFabPEN + (totalPlanchasUSD * exchangeRate) + totalMatPEN + totalLaborPEN;
 
     // --- Handlers ---
-
-    const updateCostItem = (id: string, field: keyof CostItem, value: any) => {
-        setCostItems(prev => prev.map(item => {
+    const updateItem = (setter: any, id: string, field: string, value: any) => {
+        setter((prev: any[]) => prev.map(item => {
             if (item.id === id) {
                 const newItem = { ...item, [field]: value };
-                if (field === 'cantidad' || field === 'precioUnit') {
-                    newItem.total = Number(newItem.cantidad) * Number(newItem.precioUnit);
+                if (field === 'cantidad' || field === 'precioUnit' || field === 'dias' || field === 'pagoDia') {
+                    if (item.rol) { // Labor
+                        newItem.total = Number(newItem.cantidad) * Number(newItem.dias) * Number(newItem.pagoDia);
+                    } else {
+                        newItem.total = Number(newItem.cantidad) * Number(newItem.precioUnit);
+                    }
                 }
                 return newItem;
             }
@@ -101,296 +118,235 @@ export default function CostStructurePage() {
         }));
     };
 
-    const updateMaterialItem = (id: string, field: keyof MaterialItem, value: any) => {
-        setMaterialItems(prev => prev.map(item => {
-            if (item.id === id) {
-                const newItem = { ...item, [field]: value };
-                if (field === 'cantidad' || field === 'precioUnit') {
-                    newItem.total = Number(newItem.cantidad) * Number(newItem.precioUnit);
-                }
-                return newItem;
-            }
-            return item;
-        }));
+    const goBack = () => {
+        window.location.reload(); // Simple way to trigger Layout change back if needed, or we could lift state
     };
-
-    const updateLaborItem = (id: string, field: keyof LaborItem, value: any) => {
-        setLaborItems(prev => prev.map(item => {
-            if (item.id === id) {
-                const newItem = { ...item, [field]: value };
-                if (field === 'cantidad' || field === 'dias' || field === 'pagoDia') {
-                    newItem.total = Number(newItem.cantidad) * Number(newItem.dias) * Number(newItem.pagoDia);
-                }
-                return newItem;
-            }
-            return item;
-        }));
-    };
-
-    // --- UI Components ---
-
-    const TableHeader = ({ icon: Icon, title, total }: { icon: any, title: string, total: number }) => (
-        <div className="flex justify-between items-center mb-4 px-2">
-            <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
-                    <Icon size={20} />
-                </div>
-                <h3 className="text-lg font-bold text-gray-200 uppercase tracking-tight">{title}</h3>
-            </div>
-            <div className="text-right">
-                <span className="text-[10px] text-gray-500 uppercase font-black block tracking-widest">Subtotal</span>
-                <span className="text-xl font-black text-emerald-400">S/ {total.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
-            </div>
-        </div>
-    );
 
     return (
-        <div className="flex flex-col gap-8 min-h-screen bg-[#0a0a0b] p-2 rounded-xl border border-white/5">
-            {/* Header */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/5 p-8 rounded-2xl backdrop-blur-xl border border-white/10 shadow-2xl">
-                <div>
-                    <h1 className="text-4xl font-black tracking-tighter text-white uppercase italic flex items-center gap-4">
-                        <Layers className="text-emerald-500" size={32} />
-                        Análisis de Costos Prodac
-                    </h1>
-                    <p className="text-gray-400 text-xs mt-2 uppercase tracking-[0.2em] font-bold flex items-center gap-2">
-                        <ArrowRightLeft size={14} className="text-emerald-500" />
-                        Reconstrucción Estrumetal x Prodac • Prototipo de Auditoría
-                    </p>
-                </div>
-
-                <div className="flex flex-col items-end">
-                    <div className="bg-emerald-500/10 border border-emerald-500/20 px-6 py-4 rounded-xl text-right">
-                        <span className="text-[10px] text-emerald-300 uppercase font-black block tracking-widest mb-1">Costo Total Estimado</span>
-                        <span className="text-4xl font-black text-emerald-400 tracking-tighter">
-                            S/ {totalGeneral.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                        </span>
-                    </div>
-                </div>
-            </div>
-
-            {/* Quick Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {[
-                    { label: 'Fabricación', value: totalFabricacion, icon: Package, color: 'text-blue-400' },
-                    { label: 'Insumos / Alambres', value: totalMateriales, icon: TrendingUp, color: 'text-purple-400' },
-                    { label: 'Mano de Obra', value: totalLabor, icon: UsersIcon, color: 'text-orange-400' },
-                    { label: 'Margen Proyectado', value: totalGeneral * 0.15, icon: Calculator, color: 'text-emerald-400' },
-                ].map((stat, i) => (
-                    <div key={i} className="bg-white/5 border border-white/10 p-5 rounded-2xl hover:bg-white/[0.07] transition-all">
-                        <div className="flex justify-between items-center mb-2">
-                            <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest">{stat.label}</span>
-                            <stat.icon size={16} className={stat.color} />
-                        </div>
-                        <div className="text-xl font-bold text-gray-100">S/ {stat.value.toLocaleString()}</div>
-                    </div>
-                ))}
-            </div>
-
-            {/* Tables Container */}
-            <div className="space-y-12 pb-20">
-                {/* 1. Fabricación de Componentes */}
-                <section>
-                    <TableHeader icon={Package} title="Fabricación de Componentes" total={totalFabricacion} />
-                    <div className="bg-white/5 rounded-2xl overflow-hidden border border-white/10">
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse">
-                                <thead>
-                                    <tr className="bg-white/5 text-[9px] uppercase tracking-widest text-gray-400">
-                                        <th className="p-4 font-black">Item/Código</th>
-                                        <th className="p-4 font-black">Descripción</th>
-                                        <th className="p-4 font-black text-center">Cantidad (UN)</th>
-                                        <th className="p-4 font-black text-center">Precio Unit.</th>
-                                        <th className="p-4 font-black text-right">Total</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-white/[0.05]">
-                                    {costItems.map(item => (
-                                        <tr key={item.id} className="group hover:bg-white/[0.02] transition-colors">
-                                            <td className="p-4">
-                                                <div className="text-emerald-400 font-bold text-xs">{item.item}</div>
-                                                <div className="text-[10px] text-gray-500 font-mono tracking-tighter">{item.codigo}</div>
-                                            </td>
-                                            <td className="p-4">
-                                                <input
-                                                    type="text"
-                                                    value={item.descripcion}
-                                                    onChange={(e) => updateCostItem(item.id, 'descripcion', e.target.value)}
-                                                    className="bg-transparent border-none text-gray-300 text-xs font-medium w-full focus:outline-none focus:text-white"
-                                                />
-                                            </td>
-                                            <td className="p-4 text-center">
-                                                <input
-                                                    type="number"
-                                                    value={item.cantidad}
-                                                    onChange={(e) => updateCostItem(item.id, 'cantidad', parseFloat(e.target.value))}
-                                                    className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-center text-xs font-bold text-emerald-400 w-24 focus:ring-1 focus:ring-emerald-500/50 outline-none"
-                                                />
-                                            </td>
-                                            <td className="p-4 text-center">
-                                                <input
-                                                    type="number"
-                                                    step="0.0001"
-                                                    value={item.precioUnit}
-                                                    onChange={(e) => updateCostItem(item.id, 'precioUnit', parseFloat(e.target.value))}
-                                                    className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-center text-xs font-bold text-emerald-400 w-24 focus:ring-1 focus:ring-emerald-500/50 outline-none"
-                                                />
-                                            </td>
-                                            <td className="p-4 text-right">
-                                                <div className="text-xs font-black text-gray-100">S/ {item.total.toFixed(2)}</div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </section>
-
-                {/* 2. Materiales e Insumos */}
-                <section>
-                    <TableHeader icon={TrendingUp} title="Insumos y Alambres" total={totalMateriales} />
-                    <div className="bg-white/5 rounded-2xl overflow-hidden border border-white/10">
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse">
-                                <thead>
-                                    <tr className="bg-white/5 text-[9px] uppercase tracking-widest text-gray-400">
-                                        <th className="p-4 font-black">Descripción Insumo</th>
-                                        <th className="p-4 font-black text-center">Cantidad</th>
-                                        <th className="p-4 font-black text-center">Unidad</th>
-                                        <th className="p-4 font-black text-center">Precio Unit. (S/)</th>
-                                        <th className="p-4 font-black text-right">Total</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-white/[0.05]">
-                                    {materialItems.map(item => (
-                                        <tr key={item.id} className="group hover:bg-white/[0.02] transition-colors">
-                                            <td className="p-4">
-                                                <input
-                                                    type="text"
-                                                    value={item.descripcion}
-                                                    onChange={(e) => updateMaterialItem(item.id, 'descripcion', e.target.value)}
-                                                    className="bg-transparent border-none text-gray-300 text-xs font-medium w-full focus:outline-none focus:text-white"
-                                                />
-                                            </td>
-                                            <td className="p-4 text-center">
-                                                <input
-                                                    type="number"
-                                                    value={item.cantidad}
-                                                    onChange={(e) => updateMaterialItem(item.id, 'cantidad', parseFloat(e.target.value))}
-                                                    className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-center text-xs font-bold text-emerald-400 w-24 outline-none"
-                                                />
-                                            </td>
-                                            <td className="p-4 text-center text-[10px] text-gray-500 font-black uppercase">
-                                                {item.unidad}
-                                            </td>
-                                            <td className="p-4 text-center">
-                                                <input
-                                                    type="number"
-                                                    step="0.01"
-                                                    value={item.precioUnit}
-                                                    onChange={(e) => updateMaterialItem(item.id, 'precioUnit', parseFloat(e.target.value))}
-                                                    className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-center text-xs font-bold text-emerald-400 w-24 outline-none"
-                                                />
-                                            </td>
-                                            <td className="p-4 text-right">
-                                                <div className="text-xs font-black text-gray-100">S/ {item.total.toFixed(2)}</div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </section>
-
-                {/* 3. Mano de Obra */}
-                <section>
-                    <TableHeader icon={UsersIcon} title="Mano de Obra Estimada" total={totalLabor} />
-                    <div className="bg-white/5 rounded-2xl overflow-hidden border border-white/10">
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse">
-                                <thead>
-                                    <tr className="bg-white/5 text-[9px] uppercase tracking-widest text-gray-400">
-                                        <th className="p-4 font-black">Rol / Tarea</th>
-                                        <th className="p-4 font-black text-center">N° Personas</th>
-                                        <th className="p-4 font-black text-center">Días</th>
-                                        <th className="p-4 font-black text-center">Pago p/Día</th>
-                                        <th className="p-4 font-black text-right">Total</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-white/[0.05]">
-                                    {laborItems.map(item => (
-                                        <tr key={item.id} className="group hover:bg-white/[0.02] transition-colors">
-                                            <td className="p-4">
-                                                <input
-                                                    type="text"
-                                                    value={item.rol}
-                                                    onChange={(e) => updateLaborItem(item.id, 'rol', e.target.value)}
-                                                    className="bg-transparent border-none text-gray-300 text-xs font-medium w-full outline-none"
-                                                />
-                                            </td>
-                                            <td className="p-4 text-center">
-                                                <input
-                                                    type="number"
-                                                    value={item.cantidad}
-                                                    onChange={(e) => updateLaborItem(item.id, 'cantidad', parseInt(e.target.value))}
-                                                    className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-center text-xs font-bold text-orange-400 w-20 outline-none"
-                                                />
-                                            </td>
-                                            <td className="p-4 text-center">
-                                                <input
-                                                    type="number"
-                                                    value={item.dias}
-                                                    onChange={(e) => updateLaborItem(item.id, 'dias', parseInt(e.target.value))}
-                                                    className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-center text-xs font-bold text-orange-400 w-20 outline-none"
-                                                />
-                                            </td>
-                                            <td className="p-4 text-center">
-                                                <input
-                                                    type="number"
-                                                    value={item.pagoDia}
-                                                    onChange={(e) => updateLaborItem(item.id, 'pagoDia', parseFloat(e.target.value))}
-                                                    className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-center text-xs font-bold text-orange-400 w-24 outline-none"
-                                                />
-                                            </td>
-                                            <td className="p-4 text-right">
-                                                <div className="text-xs font-black text-gray-100">S/ {item.total.toFixed(2)}</div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </section>
-            </div>
-
-            {/* Footer Summary Card */}
-            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-full max-w-4xl px-4 z-[60]">
-                <div className="bg-black/80 backdrop-blur-2xl border border-white/10 p-6 rounded-3xl shadow-[0_32px_64px_-16px_rgba(0,0,0,0.5)] flex justify-between items-center">
-                    <div className="flex gap-8">
-                        <div>
-                            <span className="text-[9px] text-gray-500 font-black uppercase tracking-[0.2em] block mb-1">Items Totales</span>
-                            <span className="text-lg font-bold text-white tracking-tighter">
-                                {costItems.reduce((acc, i) => acc + i.cantidad, 0).toLocaleString()} <span className="text-xs font-medium text-gray-500">Unidades</span>
-                            </span>
-                        </div>
-                        <div className="w-px h-10 bg-white/10" />
-                        <div>
-                            <span className="text-[9px] text-gray-500 font-black uppercase tracking-[0.2em] block mb-1">Insumos Alambre</span>
-                            <span className="text-lg font-bold text-white tracking-tighter">
-                                {materialItems.filter(i => i.unidad === 'kg').reduce((acc, i) => acc + i.cantidad, 0).toLocaleString()} <span className="text-xs font-medium text-gray-500">KG</span>
-                            </span>
-                        </div>
-                    </div>
-
-                    <button className="bg-emerald-600 hover:bg-emerald-500 text-white px-8 py-3 rounded-2xl font-black uppercase tracking-tighter text-xs transition-all flex items-center gap-2 shadow-lg shadow-emerald-900/40">
-                        <Save size={16} />
-                        Exportar Estructura
+        <div className="min-h-screen font-sans antialiased text-[#2D3436]" style={{ background: 'linear-gradient(135deg, #F0F2F5 0%, #E2E8F0 100%)' }}>
+            {/* Header / Navigation */}
+            <header className="fixed top-0 left-0 right-0 z-50 h-20 bg-white/40 backdrop-blur-2xl border-b border-white/50 flex items-center justify-between px-10 shadow-[0_4px_20px_rgba(0,0,0,0.03)]">
+                <div className="flex items-center gap-6">
+                    <button
+                        onClick={goBack}
+                        className="p-3 bg-[#1A1D21] text-white rounded-[14px] hover:scale-105 transition-all shadow-xl flex items-center gap-2"
+                    >
+                        <ChevronLeft size={18} />
+                        <span className="text-[10px] uppercase font-black tracking-widest">Cerrar Análisis</span>
                     </button>
+                    <div className="h-10 w-px bg-gray-300/50" />
+                    <div>
+                        <h1 className="text-xl font-[800] tracking-tighter uppercase italic flex items-center gap-2">
+                            Prodac Analysis <span className="text-[#469F7A]">2025</span>
+                        </h1>
+                        <p className="text-[9px] uppercase tracking-[0.3em] font-bold text-gray-500 opacity-60">Finanzas de Guerra • Estructura de Costos</p>
+                    </div>
                 </div>
-            </div>
+
+                <div className="flex items-center gap-8">
+                    <div className="flex flex-col items-end">
+                        <span className="text-[9px] uppercase font-black text-[#469F7A] tracking-widest">T.C. Referencial</span>
+                        <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold text-gray-400">S/</span>
+                            <input
+                                type="number"
+                                step="0.01"
+                                value={exchangeRate}
+                                onChange={(e) => setExchangeRate(parseFloat(e.target.value))}
+                                className="w-16 bg-transparent border-none text-right font-black text-xl focus:outline-none"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="bg-white/60 p-4 rounded-[22px] border border-white/80 shadow-[0_10px_30px_rgba(0,0,0,0.05)] flex items-center gap-6">
+                        <div className="text-right">
+                            <span className="text-[9px] uppercase font-black text-gray-400 tracking-widest block">Total PEN</span>
+                            <span className="text-2xl font-[800] tracking-tighter">S/ {totalPEN.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            {/* Content Body */}
+            <main className="pt-32 pb-20 px-10 max-w-7xl mx-auto space-y-12">
+
+                {/* Summary Cards */}
+                <div className="grid grid-cols-4 gap-6">
+                    {[
+                        { label: 'Fabricación Local', value: totalFabPEN, currency: 'S/', color: '#1A1D21' },
+                        { label: 'Planchas (P.O.)', value: totalPlanchasUSD, currency: '$', color: '#469F7A' },
+                        { label: 'Insumos Alambre', value: totalMatPEN, currency: 'S/', color: '#00C38B' },
+                        { label: 'Mano de Obra', value: totalLaborPEN, currency: 'S/', color: '#FF7043' },
+                    ].map((stat, i) => (
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: i * 0.1 }}
+                            key={i}
+                            className="bg-white/45 backdrop-blur-[25px] border border-white/80 p-6 rounded-[28px] shadow-[0_20px_40px_rgba(0,0,0,0.08)] relative overflow-hidden group"
+                        >
+                            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:scale-110 transition-all">
+                                <Coins size={60} color={stat.color} />
+                            </div>
+                            <span className="text-[10px] uppercase font-black tracking-widest text-gray-400 mb-2 block">{stat.label}</span>
+                            <div className="flex items-baseline gap-1">
+                                <span className="text-xs font-bold" style={{ color: stat.color }}>{stat.currency}</span>
+                                <span className="text-3xl font-[800] tracking-tight">{stat.value.toLocaleString()}</span>
+                            </div>
+                        </motion.div>
+                    ))}
+                </div>
+
+                {/* 1. Fabricación Table */}
+                <section className="space-y-4">
+                    <div className="flex items-center gap-3">
+                        <Package className="text-[#1A1D21]" size={24} />
+                        <h2 className="text-lg font-[800] uppercase tracking-tighter italic">Reconstrucción de Fabricación (Alambre)</h2>
+                    </div>
+                    <GlassTable
+                        data={fabricacion}
+                        columns={['Código', 'Descripción', 'Cant.', 'P. Unit', 'Total']}
+                        onUpdate={(id, field, value) => updateItem(setFabricacion, id, field, value)}
+                    />
+                </section>
+
+                {/* 2. Planchas Section (THE ONE TO CAUTION) */}
+                <section className="space-y-4">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <Layers className="text-[#469F7A]" size={24} />
+                            <h2 className="text-lg font-[800] uppercase tracking-tighter italic">Sección Planchas y Accesorios (USD)</h2>
+                        </div>
+                        <div className="bg-[#469F7A]/10 px-4 py-2 rounded-full border border-[#469F7A]/20 flex items-center gap-2">
+                            <Info size={14} className="text-[#469F7A]" />
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-[#469F7A]">No requiere cambios frecuentes</span>
+                        </div>
+                    </div>
+                    <p className="text-[11px] text-gray-500 font-medium max-w-2xl leading-relaxed">
+                        Estos items corresponden al sistema de comederos y fijaciones fabricados con plancha galvanizada. Se incluyen por completitud de la O.C. 4520065767 pero no afectan el análisis de costos de trefilería de Prodac.
+                    </p>
+                    <GlassTable
+                        data={planchas}
+                        currency="$"
+                        columns={['Código', 'Descripción', 'Cant.', 'P. Unit (USD)', 'Total (USD)']}
+                        onUpdate={(id, field, value) => updateItem(setPlanchas, id, field, value)}
+                        primaryColor="#469F7A"
+                    />
+                </section>
+
+                {/* 3. Insumos y Labor Matrix */}
+                <div className="grid grid-cols-2 gap-10">
+                    <section className="space-y-4">
+                        <div className="flex items-center gap-3">
+                            <TrendingUp className="text-[#00C38B]" size={24} />
+                            <h2 className="text-lg font-[800] uppercase tracking-tighter italic">Materia Prima Alambre (KG)</h2>
+                        </div>
+                        <GlassTable
+                            data={materiales}
+                            columns={['Insumo', 'Und', 'Cant.', 'P. Unit', 'Total']}
+                            onUpdate={(id, field, value) => updateItem(setMateriales, id, field, value)}
+                            primaryColor="#00C38B"
+                        />
+                    </section>
+
+                    <section className="space-y-4">
+                        <div className="flex items-center gap-3">
+                            <UsersIcon className="text-[#FF7043]" size={24} />
+                            <h2 className="text-lg font-[800] uppercase tracking-tighter italic">Mano de Obra Estimada</h2>
+                        </div>
+                        <GlassTable
+                            data={labor}
+                            columns={['Rol', 'Pers.', 'Días', 'P. Día', 'Total']}
+                            onUpdate={(id, field, value) => updateItem(setLabor, id, field, value)}
+                            primaryColor="#FF7043"
+                        />
+                    </section>
+                </div>
+
+                {/* Data Security Footer */}
+                <div className="bg-[#1A1D21] p-10 rounded-[32px] text-white flex justify-between items-center shadow-2xl relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
+                        <div className="w-full h-full bg-[radial-gradient(circle_at_20%_20%,#469F7A_0%,transparent_50%)]" />
+                    </div>
+                    <div>
+                        <div className="flex items-center gap-3 mb-2">
+                            <ShieldCheck className="text-[#469F7A]" size={20} />
+                            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-[#469F7A]">Auditoría Segura</span>
+                        </div>
+                        <h3 className="text-2xl font-[800] tracking-tighter uppercase italic">Resumen de Instrucciones Legales</h3>
+                        <ul className="mt-4 grid grid-cols-2 gap-4 text-[10px] uppercase font-bold text-white/50 tracking-widest">
+                            <li>• Atención L-V 8:00 AM - 4:30 PM</li>
+                            <li>• Gestión vía Portal Web de Proveedores</li>
+                            <li>• Agente de Retención (3% > S/ 700)</li>
+                            <li>• Facturación máx. 26 del mes</li>
+                        </ul>
+                    </div>
+
+                    <div className="text-right">
+                        <button className="bg-white text-[#1A1D21] px-10 py-4 rounded-[20px] font-black uppercase tracking-tighter text-xs hover:scale-105 transition-all shadow-white/20 shadow-2xl flex items-center gap-3">
+                            <Save size={18} />
+                            Exportar Estructura Consolidada
+                        </button>
+                    </div>
+                </div>
+            </main>
+        </div>
+    );
+}
+
+// --- Helper UI Components ---
+
+function GlassTable({ data, columns, onUpdate, currency = 'S/', primaryColor = '#1A1D21' }: any) {
+    return (
+        <div className="bg-white/45 backdrop-blur-[25px] border border-white/80 rounded-[28px] overflow-hidden shadow-[0_8px_32px_0_rgba(31,38,135,0.07)]">
+            <table className="w-full text-left border-collapse">
+                <thead>
+                    <tr className="bg-white/20 border-b border-white/50 text-[9px] uppercase font-black tracking-widest text-[#2D3436]/40">
+                        {columns.map((col: string) => (
+                            <th key={col} className="px-6 py-5">{col}</th>
+                        ))}
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-white/50">
+                    {data.map((item: any) => (
+                        <tr key={item.id} className="hover:bg-white/30 transition-colors">
+                            <td className="px-6 py-5">
+                                <span className="text-[10px] font-black font-mono tracking-tighter opacity-60" style={{ color: primaryColor }}>{item.codigo || item.unidad || item.cantidad}</span>
+                            </td>
+                            <td className="px-6 py-5">
+                                <input
+                                    type="text"
+                                    value={item.descripcion || item.rol || item.insumo}
+                                    onChange={(e) => onUpdate(item.id, item.descripcion ? 'descripcion' : 'rol', e.target.value)}
+                                    className="bg-transparent border-none text-[12px] font-[600] w-full focus:outline-none"
+                                />
+                            </td>
+                            <td className="px-6 py-5">
+                                <input
+                                    type="number"
+                                    value={item.cantidad || item.pers}
+                                    onChange={(e) => onUpdate(item.id, item.cantidad ? 'cantidad' : 'pers', parseFloat(e.target.value))}
+                                    className="w-20 bg-white/40 border border-white/80 rounded-[12px] px-3 py-2 text-center text-xs font-[800] focus:ring-2 focus:ring-white outline-none"
+                                />
+                            </td>
+                            <td className="px-6 py-5">
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    value={item.precioUnit || item.pagoDia || item.dias}
+                                    onChange={(e) => onUpdate(item.id, item.precioUnit ? 'precioUnit' : (item.pagoDia ? 'pagoDia' : 'dias'), parseFloat(e.target.value))}
+                                    className="w-24 bg-white/40 border border-white/80 rounded-[12px] px-3 py-2 text-center text-xs font-[800] focus:ring-2 focus:ring-white outline-none"
+                                    style={{ color: primaryColor }}
+                                />
+                            </td>
+                            <td className="px-6 py-5 text-right font-[800] text-sm tabular-nums">
+                                <span className="text-[10px] text-gray-400 mr-2">{currency}</span>
+                                {item.total.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
         </div>
     );
 }

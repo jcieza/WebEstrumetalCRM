@@ -46,7 +46,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
 
     const isMobileLayout = isTabletMode || isPhoneMode;
     const isCollapsed = activeTab === 'emails' || activeTab === 'messages';
-    const showSidebar = !isMobileLayout && !isMailSubdomain;
+    const isFullScreenModule = activeTab === 'cost-structure';
+    const showSidebar = !isMobileLayout && !isMailSubdomain && !isFullScreenModule;
     const showFurniture = !isMailSubdomain;
 
     // Widths
