@@ -447,7 +447,8 @@ const MailPage = () => {
 
     // Advanced Filtering
     const filteredMessages = messages.filter(m => {
-        const matchesAccount = filterAccount === 'all' || m.to === filterAccount;
+        // Mejorado: El filtro de cuenta debe considerar tanto el receptor como el emisor
+        const matchesAccount = filterAccount === 'all' || m.to === filterAccount || m.from === filterAccount;
         const matchesSearch = !searchQuery ||
             [m.subject || '', m.from || '', m.body || ''].some(f => f.toLowerCase().includes(searchQuery.toLowerCase()));
 
@@ -1061,19 +1062,21 @@ const MailPage = () => {
                     {/* Email List - Gmail Canvas Style */}
                     <div className="flex-1 flex flex-col min-w-0 bg-white md:m-2 md:rounded-2xl shadow-sm border border-slate-200 overflow-hidden relative">
                         <div className="flex-1 overflow-y-auto no-scrollbar">
-                            <div className="flex border-b border-slate-100">
-                                {['Principal', 'Promociones', 'Social'].map((tab, i) => (
-                                    <button
-                                        key={tab}
-                                        className={`px-8 py-4 text-sm font-medium relative transition-colors ${i === 0 ? 'text-[#0B57D0] border-b-[3px] border-[#0B57D0]' : 'text-slate-600 hover:bg-slate-50'}`}
-                                    >
-                                        <div className="flex items-center gap-4">
-                                            {i === 0 && <Inbox size={18} />}
-                                            {tab}
-                                        </div>
-                                    </button>
-                                ))}
-                            </div>
+                            {currentFolder === 'inbox' && (
+                                <div className="flex border-b border-slate-100">
+                                    {['Principal', 'Promociones', 'Social'].map((tab, i) => (
+                                        <button
+                                            key={tab}
+                                            className={`px-8 py-4 text-sm font-medium relative transition-colors ${i === 0 ? 'text-[#0B57D0] border-b-[3px] border-[#0B57D0]' : 'text-slate-600 hover:bg-slate-50'}`}
+                                        >
+                                            <div className="flex items-center gap-4">
+                                                {i === 0 && <Inbox size={18} />}
+                                                {tab}
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                             {filteredMessages.length > 0 ? filteredMessages.map(msg => {
                                 const isUnread = msg.status === 'NEW';
                                 return (
