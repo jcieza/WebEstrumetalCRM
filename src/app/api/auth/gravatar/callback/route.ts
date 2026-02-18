@@ -8,8 +8,10 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const code = searchParams.get('code');
 
-    const host = req.headers.get('host');
-    const protocol = host?.includes('localhost') ? 'http' : 'https';
+    let host = req.headers.get('host') || 'localhost:3000';
+    if (host.startsWith('0.0.0.0')) host = host.replace('0.0.0.0', 'localhost');
+
+    const protocol = host.includes('localhost') ? 'http' : 'https';
     const redirectUri = `${protocol}://${host}/api/auth/gravatar/callback`;
 
     if (!code) {

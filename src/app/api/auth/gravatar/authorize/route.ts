@@ -8,11 +8,14 @@ export async function GET(req: NextRequest) {
         return NextResponse.redirect(new URL('/crm/mail?gravatar_status=error&error=not_configured', req.url));
     }
 
-    const host = req.headers.get('host');
-    const protocol = host?.includes('localhost') ? 'http' : 'https';
+    let host = req.headers.get('host') || 'localhost:3000';
+    if (host.startsWith('0.0.0.0')) host = host.replace('0.0.0.0', 'localhost');
+
+    const protocol = host.includes('localhost') ? 'http' : 'https';
     const redirectUri = `${protocol}://${host}/api/auth/gravatar/callback`;
 
     const authUrl = `https://public-api.wordpress.com/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=auth+gravatar-profile:read+gravatar-profile:manage`;
 
-    return NextResponse.redirect(authUrl);
+    const redirectResponse = NextResponse.redirect(authUrl);
+    return redirectResponse;
 }

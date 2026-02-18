@@ -12,12 +12,56 @@ import {
 
 const WhatsAppPage = () => {
     const [selectedChat, setSelectedChat] = useState<any>(null);
+    const [isConnected, setIsConnected] = useState(false);
+    const [checkingStatus, setCheckingStatus] = useState(true);
+
+    React.useEffect(() => {
+        const checkConnection = () => {
+            const connected = localStorage.getItem('whatsapp_connected') === 'true';
+            setIsConnected(connected);
+            setCheckingStatus(false);
+        };
+        checkConnection();
+        window.addEventListener('storage', checkConnection);
+        return () => window.removeEventListener('storage', checkConnection);
+    }, []);
 
     const chats = [
         { id: 1, name: 'Juan Diego (SHOPSMART)', last: 'El precio está un poco alto...', time: '10:45', unread: 2, avatar: 'JD' },
         { id: 2, name: 'María García (TEXTILES SAC)', last: 'Confirmado para el lunes', time: '09:30', unread: 0, avatar: 'MG' },
         { id: 3, name: 'Pedro Mendoza', last: 'Foto del producto adjunta', time: 'AYER', unread: 0, avatar: 'PM' },
     ];
+
+    if (checkingStatus) {
+        return (
+            <div className="h-[calc(100vh-140px)] flex items-center justify-center bg-white border border-gray-100 rounded-lg shadow-lg">
+                <RefreshCw size={32} className="text-green-800 animate-spin opacity-20" />
+            </div>
+        );
+    }
+
+    if (!isConnected) {
+        return (
+            <div className="h-[calc(100vh-140px)] bg-white border border-gray-100 rounded-lg shadow-lg flex flex-col items-center justify-center p-8 text-center bg-[radial-gradient(circle_at_20%_20%,#f0fdf4_0%,transparent_50%)]">
+                <div className="w-24 h-24 bg-green-50 rounded-[32px] flex items-center justify-center text-green-800 mb-8 shadow-inner">
+                    <QrCode size={48} strokeWidth={1.5} />
+                </div>
+                <h2 className="text-2xl font-[900] text-gray-800 uppercase tracking-tighter mb-4 italic">Vinculación de WhatsApp CRM</h2>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest max-w-sm mb-12 leading-loose">
+                    Para habilitar el CRM de mensajería, debes configurar tu instancia de Evolution API y escanear el código QR de vinculación.
+                </p>
+                <div className="flex flex-col items-center gap-4">
+                    <button
+                        onClick={() => window.dispatchEvent(new CustomEvent('navigate', { detail: 'settings' }))}
+                        className="px-12 py-4 bg-green-800 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-xl shadow-green-900/20 hover:scale-105 transition-all"
+                    >
+                        Configurar Integración
+                    </button>
+                    <span className="text-[9px] font-black text-gray-300 uppercase tracking-widest">Requiere Evolution API v2.0+</span>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="flex h-[calc(100vh-140px)] border border-gray-100 rounded-lg shadow-lg overflow-hidden bg-white">

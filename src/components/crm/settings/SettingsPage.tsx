@@ -8,6 +8,8 @@ import {
 import { auth } from '@/lib/firebase';
 import { updateProfile, updatePassword } from 'firebase/auth';
 
+import WhatsAppIntegration from './WhatsAppIntegration';
+
 const ToggleSwitch = ({ enabled, onToggle }: { enabled: boolean, onToggle: () => void }) => (
     <button
         onClick={onToggle}
@@ -217,6 +219,13 @@ const SettingsPage = () => {
                                     {saving ? 'Guardando...' : 'Guardar Cambios'}
                                 </button>
                             </div>
+                        </div>
+                    )}
+
+                    {activeSection === 'integrations' && (
+                        <div className="flex flex-col gap-4">
+                            {renderHeader('Integraciones y API', Server)}
+                            <WhatsAppIntegration />
                         </div>
                     )}
 
