@@ -49,8 +49,9 @@ const ESTRUMETAL_SIGNATURE = `
 // - [x] Update: Signature text to "Despacho de Oficina"
 // - [/] Comprehensive Overhaul: Fix structures (In Progress), HTML rendering, Multiple Recipients, Unread Counter, and Redesign Compose Modal.
 //     - [x] Phase 1: Logic Consolidation (Completed)
-//     - [x] Phase 2: Structural Unification (Completed)
-//     - [/] Phase 3: Feature Polish - Mobile Redesign (In Progress)
+import { getGravatarUrl } from '@/utils/gravatar';
+import GravatarHoverCard from './GravatarHoverCard';
+import GmailCompose from './GmailCompose';
 
 const GMAIL_THEME = {
     dark: {
@@ -119,10 +120,13 @@ const MailPage = () => {
     const [undoCountdown, setUndoCountdown] = useState(5);
     const [previewingFile, setPreviewingFile] = useState<{ url: string, type: string, name: string } | null>(null);
     const [isMailSubdomain, setIsMailSubdomain] = useState(false);
+    const [hoveredEmail, setHoveredEmail] = useState<string | null>(null);
+    const [hoverPosition, setHoverPosition] = useState({ x: 0, y: 0 });
 
     const [userProfile, setUserProfile] = useState({
         displayName: auth.currentUser?.displayName || '',
         photoURL: auth.currentUser?.photoURL || '',
+        email: auth.currentUser?.email || '',
     });
 
     const addToast = (type: 'success' | 'new', message: string) => {
@@ -516,7 +520,11 @@ const MailPage = () => {
 
                 <div className={`mt-auto p-3 flex items-center gap-3 rounded-3xl border shadow-lg cursor-pointer transition-all ${theme === 'dark' ? 'bg-slate-900/40 border-white/5 hover:bg-slate-900/60' : 'bg-white/40 border-white/60 hover:bg-white/60'}`} onClick={() => setShowSubSettings(true)}>
                     <div className={`w-9 h-9 rounded-full flex items-center justify-center font-black overflow-hidden shadow-inner border ${theme === 'dark' ? 'bg-slate-800 text-slate-400 border-white/10' : 'bg-slate-200 text-slate-500 border-white'}`}>
-                        {userProfile.photoURL ? <img src={userProfile.photoURL} alt="User" className="w-full h-full object-cover" /> : userProfile.displayName?.charAt(0) || 'U'}
+                        <img
+                            src={userProfile.photoURL || getGravatarUrl(userProfile.email) || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"}
+                            alt="User"
+                            className="w-full h-full object-cover"
+                        />
                     </div>
                     <div className="hidden lg:flex flex-col min-w-0">
                         <p className={`text-[10px] font-black truncate uppercase tracking-tight ${theme === 'dark' ? 'text-slate-100' : 'text-slate-800'}`}>{userProfile.displayName || 'Usuario'}</p>
@@ -571,7 +579,17 @@ const MailPage = () => {
                                         <div className="w-10 h-10 rounded-full shrink-0 flex items-center justify-center text-white font-black text-sm uppercase bg-gradient-to-br from-green-500 to-green-700 shadow-md overflow-hidden">{msg.from.charAt(0)}</div>
                                         <div className="min-w-0 flex-1 flex flex-col items-start">
                                             <div className="flex justify-between w-full mb-0.5">
-                                                <span className={`text-[12px] truncate uppercase ${msg.status === 'NEW' ? 'font-black' : 'font-medium opacity-60'}`}>{msg.from.split('<')[0].replace(/"/g, '') || msg.from}</span>
+                                                <span
+                                                    className={`text-[12px] truncate uppercase ${msg.status === 'NEW' ? 'font-black' : 'font-medium opacity-60'}`}
+                                                    onMouseEnter={(e) => {
+                                                        const rect = e.currentTarget.getBoundingClientRect();
+                                                        setHoverPosition({ x: rect.left, y: rect.bottom });
+                                                        setHoveredEmail(msg.from.includes('<') ? msg.from.split('<')[1].split('>')[0] : msg.from);
+                                                    }}
+                                                    onMouseLeave={() => setHoveredEmail(null)}
+                                                >
+                                                    {msg.from.split('<')[0].replace(/"/g, '') || msg.from}
+                                                </span>
                                                 <span className="text-[9px] font-black text-slate-400">{new Date(msg.receivedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                             </div>
                                             <h4 className={`text-[11px] font-black uppercase tracking-tight line-clamp-1 ${msg.status === 'NEW' ? '' : 'opacity-60'}`}>{msg.subject}</h4>
@@ -705,13 +723,11 @@ const MailPage = () => {
                             onClick={() => setShowSubSettings(true)}
                             className="p-1 rounded-full border-2 border-transparent hover:border-slate-300 transition-all shrink-0"
                         >
-                            {userProfile.photoURL ? (
-                                <img src={userProfile.photoURL} alt="User" className="w-8 h-8 md:w-9 md:h-9 rounded-full object-cover" />
-                            ) : (
-                                <div className="w-8 h-8 md:w-9 md:h-9 bg-green-700 rounded-full flex items-center justify-center text-xs text-white font-bold">
-                                    {userProfile.displayName?.charAt(0) || 'U'}
-                                </div>
-                            )}
+                            <img
+                                src={userProfile.photoURL || getGravatarUrl(userProfile.email) || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"}
+                                alt="User"
+                                className="w-8 h-8 md:w-9 md:h-9 rounded-full object-cover"
+                            />
                         </button>
                     </div>
                 </div>
@@ -801,6 +817,12 @@ const MailPage = () => {
                                                             fontWeight: isUnread ? 700 : 400,
                                                             color: isUnread ? colors.textPrimary : colors.textSecondary
                                                         }}
+                                                        onMouseEnter={(e) => {
+                                                            const rect = e.currentTarget.getBoundingClientRect();
+                                                            setHoverPosition({ x: rect.left, y: rect.bottom });
+                                                            setHoveredEmail(msg.from.includes('<') ? msg.from.split('<')[1].split('>')[0] : msg.from);
+                                                        }}
+                                                        onMouseLeave={() => setHoveredEmail(null)}
                                                     >
                                                         {msg.from.split('<')[0].trim() || msg.from}
                                                     </span>
@@ -976,13 +998,11 @@ const MailPage = () => {
                             onClick={() => setShowSubSettings(true)}
                             className="p-1 rounded-full border-2 border-transparent hover:border-slate-300 transition-all shrink-0"
                         >
-                            {userProfile.photoURL ? (
-                                <img src={userProfile.photoURL} alt="User" className="w-9 h-9 rounded-full object-cover" />
-                            ) : (
-                                <div className="w-9 h-9 bg-green-700 rounded-full flex items-center justify-center text-xs text-white font-bold">
-                                    {userProfile.displayName?.charAt(0) || 'U'}
-                                </div>
-                            )}
+                            <img
+                                src={userProfile.photoURL || getGravatarUrl(userProfile.email) || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"}
+                                alt="User"
+                                className="w-9 h-9 rounded-full object-cover"
+                            />
                         </button>
                     </div>
                 </div>
@@ -1014,7 +1034,7 @@ const MailPage = () => {
                             return (
                                 <button
                                     key={folder.id}
-                                    onClick={() => { setCurrentFolder(folder.id as any); setShowMobileSidebar(false); }}
+                                    onClick={() => { setCurrentFolder(folder.id as any); setSelectedMessage(null); setShowMobileSidebar(false); }}
                                     className={`flex items-center gap-4 px-6 py-3 mr-2 rounded-r-full text-sm transition-all group ${isActive ? 'bg-[#D3E3FD] text-[#041E49] font-bold' : 'hover:bg-slate-200/50'}`}
                                     style={{ color: isActive ? '#041E49' : colors.textSecondary }}
                                 >
@@ -1082,7 +1102,15 @@ const MailPage = () => {
                                             <div className="flex-1 min-w-0 flex flex-col md:flex-row md:items-center gap-0.5 md:gap-4">
                                                 {/* Sender - Row 1 Mobile, Col 1 Desktop */}
                                                 <div className="flex justify-between items-center md:block md:w-48 md:shrink-0">
-                                                    <span className={`text-sm md:text-sm truncate ${isUnread ? 'font-bold text-slate-900' : 'text-slate-600'}`}>
+                                                    <span
+                                                        className={`text-sm md:text-sm truncate ${isUnread ? 'font-bold text-slate-900' : 'text-slate-600'}`}
+                                                        onMouseEnter={(e) => {
+                                                            const rect = e.currentTarget.getBoundingClientRect();
+                                                            setHoverPosition({ x: rect.left, y: rect.bottom });
+                                                            setHoveredEmail(msg.from.includes('<') ? msg.from.split('<')[1].split('>')[0] : msg.from);
+                                                        }}
+                                                        onMouseLeave={() => setHoveredEmail(null)}
+                                                    >
                                                         {msg.from.split('<')[0].trim() || msg.from}
                                                     </span>
                                                     {/* Date - Desktop remains far right, Mobile moves here */}
@@ -1326,253 +1354,62 @@ const MailPage = () => {
                 </div>
             )}
 
-            {/* Compose Modal */}
+            {/* Compose Dockable Window */}
             {showCompose && (
-                <div className="fixed inset-0 z-[2100] flex items-center justify-center p-4">
-                    <div
-                        className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm"
-                        onClick={() => setShowCompose(false)}
-                    />
-                    <div className={`relative w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col border h-full md:h-[80vh] md:rounded-[32px] transition-colors duration-500 ${theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-100'}`}>
-                        <div className={`p-4 md:p-6 border-b flex justify-between items-center shrink-0 transition-colors duration-500 ${theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50/50'}`}>
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-green-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-green-900/20">
-                                    <Send size={20} />
-                                </div>
-                                <div>
-                                    <h3 className={`text-xs md:text-sm font-black uppercase tracking-tight ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Nuevo Mensaje</h3>
-                                    <p className="text-[7px] md:text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">@ciaestrumetal.com</p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <button className={`p-2 rounded-lg text-slate-400 hover:text-green-600 transition-all ${theme === 'dark' ? 'hover:bg-slate-700' : 'hover:bg-slate-100'}`} onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
-                                    {theme === 'dark' ? <Smile size={18} /> : <Clock size={18} />}
-                                </button>
-                                <button
-                                    onClick={() => setShowCompose(false)}
-                                    className={`p-2 rounded-lg text-slate-400 transition-all ${theme === 'dark' ? 'hover:bg-slate-700' : 'hover:bg-slate-100'}`}
-                                >
-                                    <X size={20} />
-                                </button>
-                            </div>
-                        </div>
+                <GmailCompose
+                    theme={theme}
+                    onClose={() => setShowCompose(false)}
+                    initialTo={composeTo}
+                    initialSubject={composeSubject}
+                    initialBody={composeBody}
+                    onSend={async (data) => {
+                        setIsSending(true);
+                        try {
+                            const recipients = data.to.split(/[,;]/).map(r => r.trim()).filter(Boolean);
+                            let attachments: Attachment[] = [];
+                            if (data.files.length > 0) {
+                                attachments = await handleFileUpload(data.files);
+                            }
 
-                        <div className="p-4 md:p-6 flex flex-col gap-4 overflow-y-auto flex-1">
-                            {/* Templates Toolbar */}
-                            <div className="flex gap-2 pb-2 overflow-x-auto no-scrollbar">
-                                <button
-                                    onClick={() => {
-                                        setComposeSubject('PRESENTACIÓN ESTRUMETAL - SOLUCIONES METALMECÁNICAS');
-                                        setComposeBody('Estimado cliente,\n\nEs un gusto saludarle. Adjunto enviamos nuestra presentación corporativa resaltando la capacidad de nuestra planta para sus proyectos...\n\nAtentamente,\nEquipo Estrumetal');
-                                    }}
-                                    className={`shrink-0 px-3 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-tight transition-all border ${theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-slate-100 border-slate-200 text-slate-600'}`}
-                                >
-                                    ✨ Presentación
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        setComposeSubject('COTIZACIÓN ESTRUMETAL - REF: ');
-                                        setComposeBody('Saludos cordiales,\n\nEn respuesta a su solicitud, adjunto encontrará la cotización formal para los servicios industriales requeridos.\n\nQuedamos atentos a sus comentarios.\n\nAtentamente,\nDepartamento de Ventas');
-                                    }}
-                                    className={`shrink-0 px-3 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-tight transition-all border ${theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-slate-100 border-slate-200 text-slate-600'}`}
-                                >
-                                    📄 Cotización Base
-                                </button>
-                            </div>
+                            for (const recipient of recipients) {
+                                const response = await fetch('/api/mail/send', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        to: recipient,
+                                        subject: data.subject,
+                                        body: `<div style="font-family: sans-serif">${data.body.replace(/\n/g, '<br/>')}${ESTRUMETAL_SIGNATURE}</div>`,
+                                        fromName: auth.currentUser?.displayName || senderAccount.split('@')[0].toUpperCase(),
+                                        fromEmail: senderAccount,
+                                        attachments: attachments
+                                    })
+                                });
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="flex flex-col gap-1.5">
-                                    <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Desde</label>
-                                    <select
-                                        value={senderAccount}
-                                        onChange={(e) => setSenderAccount(e.target.value)}
-                                        className={`w-full border rounded-xl px-4 py-3 text-xs font-bold outline-none focus:ring-2 focus:ring-green-500/10 transition-all ${theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-slate-700'}`}
-                                    >
-                                        <option value="ventas@ciaestrumetal.com">ventas@ciaestrumetal.com</option>
-                                        <option value="administracion@ciaestrumetal.com">administracion@ciaestrumetal.com</option>
-                                        {auth.currentUser?.email && !['ventas@ciaestrumetal.com', 'administracion@ciaestrumetal.com'].includes(auth.currentUser.email) && (
-                                            <option value={auth.currentUser.email}>{auth.currentUser.email}</option>
-                                        )}
-                                    </select>
-                                </div>
-
-                                <div className="flex flex-col gap-1.5 relative">
-                                    <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Para (Separar con coma)</label>
-                                    <div className="relative">
-                                        <input
-                                            type="text"
-                                            placeholder="ejemplo@cliente.com, otro@mail.com"
-                                            value={composeTo}
-                                            onChange={(e) => {
-                                                setComposeTo(e.target.value);
-                                                setShowRecipientsSuggest(true);
-                                            }}
-                                            onFocus={() => setShowRecipientsSuggest(true)}
-                                            className={`w-full border rounded-xl px-4 py-3 text-xs font-bold outline-none focus:ring-2 focus:ring-green-500/10 transition-all placeholder:text-slate-400 ${theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-slate-700'}`}
-                                        />
-                                        {showRecipientsSuggest && composeTo.length > 0 && !composeTo.includes(',') && (
-                                            <div className={`absolute top-full left-0 right-0 z-[2200] border rounded-xl mt-1 shadow-2xl max-h-40 overflow-y-auto overflow-x-hidden ${theme === 'dark' ? 'bg-slate-800 border-slate-700 shadow-slate-950' : 'bg-white border-slate-100'}`}>
-                                                {getRecentContacts()
-                                                    .filter(c => c.toLowerCase().includes(composeTo.toLowerCase()))
-                                                    .map(contact => (
-                                                        <button
-                                                            key={contact}
-                                                            onClick={() => {
-                                                                setComposeTo(contact);
-                                                                setShowRecipientsSuggest(false);
-                                                            }}
-                                                            className={`w-full text-left px-4 py-2 text-[10px] font-bold transition-colors border-b last:border-none ${theme === 'dark' ? 'text-slate-300 hover:bg-slate-700 border-slate-700' : 'text-slate-600 hover:bg-green-50 hover:text-green-700 border-slate-50'}`}
-                                                        >
-                                                            {contact}
-                                                        </button>
-                                                    ))
-                                                }
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="flex flex-col gap-1.5">
-                                <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Asunto</label>
-                                <input
-                                    type="text"
-                                    placeholder="ASUNTO DEL MENSAJE"
-                                    value={composeSubject}
-                                    onChange={(e) => setComposeSubject(e.target.value)}
-                                    className={`w-full border rounded-xl px-4 py-3 text-xs font-black uppercase tracking-tight outline-none focus:ring-2 focus:ring-green-500/10 transition-all ${theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-100 text-slate-800'}`}
-                                />
-                            </div>
-
-                            <div className="flex flex-col gap-1.5 flex-1 min-h-[250px]">
-                                <div className={`flex items-center gap-2 p-1 border-b mb-2 ${theme === 'dark' ? 'border-slate-700' : 'border-slate-100'}`}>
-                                    <button onClick={() => setBodyFont('sans')} className={`p-2 rounded-lg text-[9px] font-black uppercase ${bodyFont === 'sans' ? 'bg-green-600 text-white' : 'text-slate-400'}`}>Sans</button>
-                                    <button onClick={() => setBodyFont('serif')} className={`p-2 rounded-lg text-[9px] font-black uppercase ${bodyFont === 'serif' ? 'bg-green-600 text-white' : 'text-slate-400'}`}>Serif</button>
-                                    <button onClick={() => setBodyFont('mono')} className={`p-2 rounded-lg text-[9px] font-black uppercase ${bodyFont === 'mono' ? 'bg-green-600 text-white' : 'text-slate-400'}`}>Mono</button>
-                                    <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-2" />
-                                    <button onClick={() => setShowEmojiPicker(!showEmojiPicker)} className="p-2 text-slate-400 hover:text-green-600"><Smile size={18} /></button>
-                                    <label className="p-2 text-slate-400 hover:text-green-600 cursor-pointer">
-                                        <Paperclip size={18} />
-                                        <input type="file" multiple className="hidden" onChange={(e) => { if (e.target.files) setComposeFiles(Array.from(e.target.files)); }} />
-                                    </label>
-                                </div>
-                                <textarea
-                                    className={`w-full flex-1 border rounded-xl px-4 py-3 text-sm md:text-base font-medium outline-none focus:ring-2 focus:ring-green-500/10 transition-all resize-none ${theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-slate-50 border-slate-100 text-slate-600'} ${bodyFont === 'serif' ? 'font-serif' : bodyFont === 'mono' ? 'font-mono' : 'font-sans'}`}
-                                    placeholder="Escribe el cuerpo del correo aquí..."
-                                    value={composeBody}
-                                    onChange={(e) => setComposeBody(e.target.value)}
-                                />
-                                {composeFiles.length > 0 && (
-                                    <div className="flex flex-wrap gap-2 mt-2">
-                                        {composeFiles.map((file, i) => (
-                                            <div key={i} className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-bold ${theme === 'dark' ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>
-                                                <Paperclip size={12} /> {file.name}
-                                                <button onClick={() => setComposeFiles(prev => prev.filter((_, idx) => idx !== i))} className="text-red-500"><X size={12} /></button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className={`p-4 md:p-6 border-t flex justify-between items-center shrink-0 ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50/30 border-slate-50'}`}>
-                            <button
-                                onClick={async () => {
-                                    if (!composeTo && !composeSubject) return;
-                                    await saveMessageToFirestore({
+                                if (response.ok) {
+                                    await addDoc(collection(db, 'incoming_messages'), {
                                         from: senderAccount,
-                                        to: composeTo,
-                                        subject: composeSubject || '(Borrador)',
-                                        body: composeBody + ESTRUMETAL_SIGNATURE,
-                                        status: 'DRAFT'
+                                        to: recipient,
+                                        subject: data.subject,
+                                        body: `<div style="font-family: sans-serif">${data.body.replace(/\n/g, '<br/>')}${ESTRUMETAL_SIGNATURE}</div>`,
+                                        receivedAt: new Date().toISOString(),
+                                        status: 'SENT',
+                                        attachments: attachments
                                     });
-                                    addToast('success', 'Borrador guardado');
-                                    setShowCompose(false);
-                                }}
-                                className="px-4 py-3 text-[10px] font-black uppercase text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-950/20 rounded-xl transition-all flex items-center gap-2"
-                            >
-                                <Clock size={14} /> Guardar Borrador
-                            </button>
-                            <div className="flex gap-3">
-                                <button
-                                    onClick={() => setShowCompose(false)}
-                                    className="px-4 py-3 text-[10px] font-black uppercase text-slate-400 hover:text-slate-600 transition-all"
-                                >
-                                    Cancelar
-                                </button>
-                                <button
-                                    onClick={async () => {
-                                        if (undoTimer) {
-                                            cancelSend();
-                                            return;
-                                        }
-                                        if (!composeTo || !composeSubject || !composeBody) {
-                                            alert('Completa los campos');
-                                            return;
-                                        }
-                                        setIsSending(true);
+                                }
+                            }
 
-                                        const timer = window.setTimeout(async () => {
-                                            try {
-                                                const recipients = composeTo.split(/[,;]/).map(r => r.trim()).filter(Boolean);
-                                                let attachments: Attachment[] = [];
-                                                if (composeFiles.length > 0) {
-                                                    attachments = await handleFileUpload(composeFiles);
-                                                }
-
-                                                for (const recipient of recipients) {
-                                                    const response = await fetch('/api/mail/send', {
-                                                        method: 'POST',
-                                                        headers: { 'Content-Type': 'application/json' },
-                                                        body: JSON.stringify({
-                                                            to: recipient,
-                                                            subject: composeSubject,
-                                                            body: `<div style="font-family: ${bodyFont === 'serif' ? 'serif' : bodyFont === 'mono' ? 'monospace' : 'sans-serif'}">${composeBody.replace(/\n/g, '<br/>')}${ESTRUMETAL_SIGNATURE}</div>`,
-                                                            fromName: auth.currentUser?.displayName || senderAccount.split('@')[0].toUpperCase(),
-                                                            fromEmail: senderAccount,
-                                                            attachments: attachments
-                                                        })
-                                                    });
-
-                                                    if (response.ok) {
-                                                        await addDoc(collection(db, 'incoming_messages'), {
-                                                            from: senderAccount,
-                                                            to: recipient,
-                                                            subject: composeSubject,
-                                                            body: `<div style="font-family: ${bodyFont === 'serif' ? 'serif' : bodyFont === 'mono' ? 'monospace' : 'sans-serif'}">${composeBody.replace(/\n/g, '<br/>')}${ESTRUMETAL_SIGNATURE}</div>`,
-                                                            receivedAt: new Date().toISOString(),
-                                                            status: 'SENT',
-                                                            attachments: attachments
-                                                        });
-                                                    }
-                                                }
-
-                                                addToast('success', 'Envío procesado correctamente');
-                                                setShowCompose(false);
-                                                setComposeTo('');
-                                                setComposeSubject('');
-                                                setComposeBody('');
-                                                setComposeFiles([]);
-                                            } catch (e) {
-                                                addToast('success', 'Error en el servidor');
-                                            } finally {
-                                                setIsSending(false);
-                                                setUndoTimer(null);
-                                            }
-                                        }, 5000);
-
-                                        setUndoTimer(timer);
-                                    }}
-                                    className={`px-6 md:px-8 py-3 rounded-xl md:rounded-2xl flex items-center gap-2 shadow-xl transition-all font-black text-[10px] uppercase tracking-widest ${undoTimer ? 'bg-red-500 text-white' : 'bg-green-700 hover:bg-green-600 text-white shadow-green-900/10'}`}
-                                >
-                                    {isSending && !undoTimer ? <Loader2 size={16} className="animate-spin" /> : undoTimer ? <X size={16} /> : <Send size={16} />}
-                                    <span className="hidden md:inline">{undoTimer ? 'DESHACER ENVÍO (5s)' : isSending ? 'Enviando...' : 'Enviar Correo'}</span>
-                                    <span className="md:hidden">{undoTimer ? 'ANULAR' : 'Enviar'}</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                            addToast('success', 'Envío procesado correctamente');
+                            setShowCompose(false);
+                            setComposeTo('');
+                            setComposeSubject('');
+                            setComposeBody('');
+                        } catch (e) {
+                            addToast('success', 'Error en el servidor');
+                        } finally {
+                            setIsSending(false);
+                        }
+                    }}
+                />
             )}
 
             {/* SubSettings Modal */}
@@ -1587,7 +1424,11 @@ const MailPage = () => {
                         <div className="p-10 flex flex-col items-center gap-8">
                             <div className="relative group">
                                 <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-green-600/20 shadow-2xl group-hover:border-green-600 transition-all cursor-pointer">
-                                    {userProfile.photoURL ? <img src={userProfile.photoURL} alt="Profile" className="w-full h-full object-cover" /> : <div className="w-full h-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-4xl font-black text-slate-400">{userProfile.displayName?.charAt(0)}</div>}
+                                    <img
+                                        src={userProfile.photoURL || getGravatarUrl(userProfile.email) || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"}
+                                        alt="Profile"
+                                        className="w-full h-full object-cover"
+                                    />
                                 </div>
                                 <label className="absolute bottom-1 right-1 p-2.5 bg-green-600 text-white rounded-2xl shadow-xl cursor-pointer hover:bg-green-700 transition-all">
                                     <ImageIcon size={18} />
@@ -1627,10 +1468,24 @@ const MailPage = () => {
                                             <button onClick={() => setLayoutMode('gmail')} className={`p-2 rounded-lg transition-all ${layoutMode === 'gmail' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-400'}`} title="Gmail Mode"><Mail size={16} /></button>
                                         </div>
                                     </div>
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex items-center justify-between mb-4">
                                         <p className="text-[10px] font-black uppercase text-slate-400">Tema Oscuro</p>
                                         <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className={`w-12 h-6 rounded-full relative transition-all ${theme === 'dark' ? 'bg-green-600' : 'bg-slate-200 shadow-inner'}`}>
                                             <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all shadow-md ${theme === 'dark' ? 'right-1' : 'left-1'}`} />
+                                        </button>
+                                    </div>
+                                    <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-white/5">
+                                        <div className="flex flex-col">
+                                            <p className="text-[10px] font-black uppercase text-slate-400">Gravatar Social</p>
+                                            <p className="text-[8px] font-bold text-slate-500">Vincular para bio y redes</p>
+                                        </div>
+                                        <button
+                                            onClick={() => {
+                                                window.location.href = '/api/auth/gravatar/authorize';
+                                            }}
+                                            className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase transition-all ${theme === 'dark' ? 'bg-blue-600/20 text-blue-400 hover:bg-blue-600/30' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
+                                        >
+                                            Vincular Cuenta
                                         </button>
                                     </div>
                                 </div>
@@ -1655,6 +1510,20 @@ const MailPage = () => {
                     </div>
                 ))}
             </div>
+            {/* Hover Card for Gravatar */}
+            {hoveredEmail && (
+                <div
+                    className="fixed z-[9000] pointer-events-none"
+                    style={{
+                        left: Math.min(hoverPosition.x + 20, window.innerWidth - 300),
+                        top: Math.min(hoverPosition.y + 20, window.innerHeight - 300)
+                    }}
+                >
+                    <div className="pointer-events-auto">
+                        <GravatarHoverCard email={hoveredEmail} theme={theme} />
+                    </div>
+                </div>
+            )}
         </>
     );
 };
