@@ -40,6 +40,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, collapsed = 
         { id: 'gems', label: 'Cliente Finder (Gems)', icon: Zap, requiresSetting: 'showGems' },
         { id: 'market-intelligence', label: 'Intel. Comercial', icon: Globe },
         { id: 'production', label: 'Producción (OP)', icon: FileInput },
+        { id: 'cost-structure', label: 'Estructura Costos', icon: BarChart3 },
         { id: 'clients', label: 'Clientes 360°', icon: Users },
         { id: 'quotations', label: 'Cotizaciones', icon: FileText },
         { id: 'guides', label: 'Guías Internas', icon: Scroll },

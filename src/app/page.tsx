@@ -21,6 +21,7 @@ import IngestorPage from '@/components/crm/ingestor/IngestorPage';
 import GeminiChatPage from '@/components/crm/chat/GeminiChatPage';
 import PurchasesPage from '@/components/crm/purchases/PurchasesPage';
 import MailPage from '@/components/crm/mail/MailPage';
+import CostStructurePage from '@/components/crm/cost-structure/CostStructurePage';
 
 export default function CRMPage() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -81,6 +82,8 @@ export default function CRMPage() {
         return <GeminiChatPage />;
       case 'purchases':
         return <PurchasesPage />;
+      case 'cost-structure':
+        return <CostStructurePage />;
       case 'settings':
         return <SettingsPage />;
       default:
