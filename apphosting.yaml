@@ -53,5 +53,6 @@ env:
       - BUILD
       - RUNTIME
   # Redirect URI explicito para OAuth - debe coincidir con lo registrado en gravatar.com/developers
+  # Usamos el dominio custom para que las cookies se establezcan en el dominio correcto
   - variable: GRAVATAR_REDIRECT_URI
-    value: https://devdealis--estrumetalonline.us-central1.hosted.app/api/auth/gravatar/callback
+    value: https://mail.disestrumetal.online/api/auth/gravatar/callback
