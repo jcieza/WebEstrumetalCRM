@@ -8,19 +8,23 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const code = searchParams.get('code');
 
-    // Usar variable de entorno explicita si existe, sino derivar del host (dev local)
+    // Base URL for internal redirects
+    let baseUrl: string;
     let redirectUri: string;
     if (REDIRECT_URI) {
+        // En produccion, derivamos el base URL del REDIRECT_URI (removiendo el path del callback)
+        baseUrl = new URL(REDIRECT_URI).origin;
         redirectUri = REDIRECT_URI;
     } else {
         let host = req.headers.get('host') || 'localhost:3000';
         if (host.startsWith('0.0.0.0')) host = host.replace('0.0.0.0', 'localhost');
         const protocol = host.includes('localhost') ? 'http' : 'https';
-        redirectUri = `${protocol}://${host}/api/auth/gravatar/callback`;
+        baseUrl = `${protocol}://${host}`;
+        redirectUri = `${baseUrl}/api/auth/gravatar/callback`;
     }
 
     if (!code) {
-        return NextResponse.redirect(new URL('/crm/mail?gravatar_status=error&error=no_code', req.url));
+        return NextResponse.redirect(new URL('/crm/mail?gravatar_status=error&error=no_code', baseUrl));
     }
 
     try {
@@ -42,7 +46,7 @@ export async function GET(req: NextRequest) {
 
         if (data.access_token) {
             // Store token in a cookie that expires in 14 days
-            const res = NextResponse.redirect(new URL('/crm/mail?gravatar_status=success', req.url));
+            const res = NextResponse.redirect(new URL('/crm/mail?gravatar_status=success', baseUrl));
             res.cookies.set('gravatar_token', data.access_token, {
                 path: '/',
                 maxAge: 60 * 60 * 24 * 14,
@@ -51,10 +55,10 @@ export async function GET(req: NextRequest) {
             });
             return res;
         } else {
-            return NextResponse.redirect(new URL(`/crm/mail?gravatar_status=error&error=${data.error}`, req.url));
+            return NextResponse.redirect(new URL(`/crm/mail?gravatar_status=error&error=${data.error}`, baseUrl));
         }
     } catch (error) {
         console.error('Gravatar Callback Error:', error);
-        return NextResponse.redirect(new URL('/crm/mail?gravatar_status=error', req.url));
+        return NextResponse.redirect(new URL('/crm/mail?gravatar_status=error', baseUrl));
     }
 }
