@@ -104,15 +104,20 @@ export const fetchGravatarProfile = async (email: string) => {
 
 /**
  * Initialize official Gravatar Hovercards
+ * Guard: solo se inicializa una vez para evitar error de relay duplicado del SDK
  */
+let hovercardsInitialized = false;
+
 export const initGravatarHovercards = async () => {
     if (typeof window === 'undefined') return;
+    if (hovercardsInitialized) return;
     try {
         // @ts-ignore
         const { hovercards } = await import('@gravatar/js');
         hovercards.attach();
+        hovercardsInitialized = true;
     } catch (error) {
-        // Quietly fail as it might be blocked or environment issue
+        // Quietly fail - no marcar como inicializado para reintentar en proximo render
     }
 };
 

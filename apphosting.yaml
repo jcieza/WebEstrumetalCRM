@@ -53,3 +53,6 @@ env:
     availability:
       - BUILD
       - RUNTIME
+  # Redirect URI explicito para OAuth - debe coincidir con lo registrado en gravatar.com/developers
+  - variable: GRAVATAR_REDIRECT_URI
+    value: https://devoealis-s44bgorkca-uca.run.app/api/auth/gravatar/callback
