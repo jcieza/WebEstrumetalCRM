@@ -95,6 +95,22 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
                 <div>
                     {children}
                 </div>
+
+                {/* Mobile Floating Action Button for Cost Structure */}
+                {isMobileLayout && showFurniture && activeTab !== 'cost-structure' && (
+                    <motion.button
+                        initial={{ scale: 0, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() => setActiveTab('cost-structure')}
+                        className="fixed right-6 z-[1001] bg-[#1A1D21] text-white p-4 rounded-2xl shadow-[0_12px_24px_rgba(0,0,0,0.3)] border border-white/10 flex items-center justify-center hover:bg-[#2D3436] transition-colors"
+                        style={{
+                            bottom: isPhoneMode ? (isMenuHidden ? 60 : 150) : 95
+                        }}
+                    >
+                        <BarChart3 size={24} />
+                    </motion.button>
+                )}
             </main>
 
             {/* Bottom Navigation for Mobile */}

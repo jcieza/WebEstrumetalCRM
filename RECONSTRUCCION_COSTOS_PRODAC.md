@@ -50,3 +50,10 @@ Este documento es la base de datos oficial para la auditoría de costos de fabri
 3. El pago a proveedores se gestiona vía Intranet (Usuario: 20555485019).
 4. Somos Agentes de Retención (3% si compra > S/. 700).
 5. Documentos facturados hasta el 26.03.2025 por cierre mensual.
+
+## 6. Control de Navegación
+*Actualización 2026-02-19*
+
+- **Acceso Móvil:** Se ha implementado un Botón de Acción Flotante (FAB) en la esquina inferior derecha exclusivo para dispositivos móviles.
+- **Iconografía:** 📊 (`BarChart3`)
+- **Comportamiento:** El botón permite saltar directamente al análisis de costos sin saturar la barra de navegación principal. Su posición es dinámica para evitar colisiones con el menú expandible.
