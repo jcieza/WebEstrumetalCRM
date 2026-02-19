@@ -82,22 +82,22 @@ export const getGravatarHash = async (email: string) => {
 };
 
 /**
- * Fetch full profile JSON
+ * Fetch full profile JSON using Gravatar API v3
  */
 export const fetchGravatarProfile = async (email: string) => {
     try {
         const hash = await getGravatarHash(email);
-        const response = await fetch(`https://www.gravatar.com/${hash}.json`);
+        const response = await fetch(`https://api.gravatar.com/v3/profiles/${hash}`);
         if (!response.ok) {
             if (response.status !== 404) {
-                console.warn(`Gravatar API returned ${response.status} for ${email}`);
+                console.warn(`Gravatar API v3 returned ${response.status} for ${email}`);
             }
             return null;
         }
         const data = await response.json();
-        return data.entry?.[0] || null;
+        return data || null;
     } catch (error) {
-        console.error('Error fetching Gravatar profile:', error);
+        console.error('Error fetching Gravatar profile v3:', error);
         return null;
     }
 };
@@ -117,19 +117,35 @@ export const initGravatarHovercards = async () => {
 };
 
 /**
- * Open Gravatar Quick Editor
+ * Get Gravatar URL with cache busting for instant refresh
  */
-export const openGravatarQuickEditor = async (token: string) => {
+export const refreshGravatarCache = (email: string, size: number = 150) => {
+    const baseUrl = getGravatarUrl(email, size);
+    return `${baseUrl}&t=${Date.now()}`;
+};
+
+/**
+ * Open Gravatar Quick Editor (SDK Optimized)
+ */
+export const openGravatarQuickEditor = async (token: string, options?: {
+    onSave?: (type: 'avatar_updated' | 'profile_updated') => void,
+    onClose?: () => void
+}) => {
     if (typeof window === 'undefined') return;
     try {
         // @ts-ignore
         const { quickEditor } = await import('@gravatar/js');
         quickEditor.open({
             accessToken: token,
-            onClose: () => console.log('Editor closed'),
-            onSave: () => {
-                console.log('Profile saved');
-                window.location.reload();
+            scope: ['about', 'avatars', 'verified-accounts', 'links'],
+            locale: 'es',
+            onClose: () => {
+                console.log('Gravatar Editor closed');
+                options?.onClose?.();
+            },
+            onSave: (type: any) => {
+                console.log('Gravatar Profile saved:', type);
+                options?.onSave?.(type);
             }
         });
     } catch (error) {
@@ -138,9 +154,9 @@ export const openGravatarQuickEditor = async (token: string) => {
 };
 
 /**
- * Get QR Code URL
+ * Get QR Code URL using Gravatar API v3
  */
 export const getGravatarQRUrl = async (email: string) => {
     const hash = await getGravatarHash(email);
-    return `https://www.gravatar.com/${hash}.qr`;
+    return `https://api.gravatar.com/v3/qr-code/${hash}`;
 };

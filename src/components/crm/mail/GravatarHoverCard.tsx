@@ -56,21 +56,21 @@ const GravatarHoverCard: React.FC<GravatarHoverCardProps> = ({ email, theme }) =
                 </div>
                 <div>
                     <h4 className={`text-lg font-black tracking-tight ${colors.textPrimary}`}>
-                        {profile.displayName || profile.preferredUsername || email.split('@')[0]}
+                        {profile.display_name || profile.displayName || profile.preferredUsername || email.split('@')[0]}
                     </h4>
-                    {profile.currentLocation && (
+                    {(profile.location || profile.currentLocation) && (
                         <p className={`text-[10px] uppercase font-bold tracking-widest flex items-center justify-center gap-1 mt-1 ${colors.textSecondary}`}>
-                            <MapPin size={10} /> {profile.currentLocation}
+                            <MapPin size={10} /> {profile.location || profile.currentLocation}
                         </p>
                     )}
                 </div>
             </div>
 
             {/* Bio Section */}
-            {profile.aboutMe && (
+            {(profile.about_me || profile.aboutMe) && (
                 <div className={`px-6 pb-4 text-center`}>
                     <p className={`text-xs font-medium leading-relaxed italic ${colors.textSecondary}`}>
-                        "{profile.aboutMe.substring(0, 100)}{profile.aboutMe.length > 100 ? '...' : ''}"
+                        "{(profile.about_me || profile.aboutMe).substring(0, 100)}{(profile.about_me || profile.aboutMe).length > 100 ? '...' : ''}"
                     </p>
                 </div>
             )}
@@ -104,7 +104,7 @@ const GravatarHoverCard: React.FC<GravatarHoverCardProps> = ({ email, theme }) =
 
                     {/* Gravatar always has a profile link */}
                     <a
-                        href={profile.profileUrl}
+                        href={profile.profile_url || profile.profileUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className={`p-2 rounded-xl transition-all hover:scale-110 ${colors.surface} ${colors.textSecondary} hover:text-blue-600`}
