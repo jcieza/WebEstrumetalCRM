@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Mail, Search, Clock, User, ArrowRight, ShieldCheck, Inbox, Archive, Trash2, Send, Paperclip, Download, Loader2, Eye, X, Settings as SettingsIcon, Smile, Type, ChevronRight, Image as ImageIcon, Menu, Star, Plus, Layout } from 'lucide-react';
+import { Mail, Search, Clock, User, ArrowRight, ShieldCheck, Inbox, Archive, Trash2, Send, Paperclip, Download, Loader2, Eye, X, Settings as SettingsIcon, Smile, Type, ChevronRight, Image as ImageIcon, Menu, Star, Plus, Layout, MoreVertical, Share2, AlarmClock, CheckSquare, Tag } from 'lucide-react';
 import { db, auth, storage } from '@/lib/firebase';
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, addDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -25,7 +25,11 @@ interface EmailMessage {
     status: 'NEW' | 'READ' | 'ARCHIVED' | 'PENDING' | 'DONE' | 'SENT' | 'DRAFT' | 'TRASH';
     attachments?: Attachment[];
     replied?: boolean;
-    folder?: 'inbox' | 'sent' | 'drafts' | 'trash'; // Opcional, para redundancia
+    folder?: 'inbox' | 'sent' | 'drafts' | 'trash';
+    starred?: boolean;
+    snoozedUntil?: string; // ISO date string
+    category?: 'primary' | 'promotions' | 'social';
+    reactions?: { emoji: string; userId: string; timestamp: string }[];
 }
 
 const AUTHORIZED_SENDERS = [
@@ -100,6 +104,13 @@ const MailPage = () => {
     const [showSubSettings, setShowSubSettings] = useState(false);
     const [showMobileSidebar, setShowMobileSidebar] = useState(false);
     const [showMobileDetail, setShowMobileDetail] = useState(false);
+
+    // New feature states
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [activeCategory, setActiveCategory] = useState<'primary' | 'promotions' | 'social'>('primary');
+    const [showSnoozeDialog, setShowSnoozeDialog] = useState(false);
+    const [showMoreMenu, setShowMoreMenu] = useState(false);
+    const [showReactionPicker, setShowReactionPicker] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'mail' | 'meet'>('mail');
     const [toasts, setToasts] = useState<{ id: number; type: 'success' | 'new' | 'info'; message: string }[]>([]);
 
@@ -469,17 +480,126 @@ const MailPage = () => {
         } catch (e) { console.error("Send new error:", e); }
     };
 
+    // ==========================================
+    // NEW FEATURE ACTIONS
+    // ==========================================
+
+    const toggleStar = async (msgId: string) => {
+        const msg = messages.find(m => m.id === msgId);
+        if (!msg) return;
+        try {
+            await updateDoc(doc(db, 'incoming_messages', msgId), { starred: !msg.starred });
+        } catch (e) { console.error('Star toggle error:', e); }
+    };
+
+    const toggleSelect = (msgId: string) => {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(msgId)) next.delete(msgId);
+            else next.add(msgId);
+            return next;
+        });
+    };
+
+    const batchAction = async (action: 'archive' | 'delete' | 'read' | 'unread' | 'star') => {
+        const ids = Array.from(selectedIds);
+        if (ids.length === 0) return;
+        try {
+            for (const id of ids) {
+                const ref = doc(db, 'incoming_messages', id);
+                switch (action) {
+                    case 'archive': await updateDoc(ref, { status: 'ARCHIVED' }); break;
+                    case 'delete': await updateDoc(ref, { status: 'TRASH' }); break;
+                    case 'read': await updateDoc(ref, { status: 'READ' }); break;
+                    case 'unread': await updateDoc(ref, { status: 'NEW' }); break;
+                    case 'star': await updateDoc(ref, { starred: true }); break;
+                }
+            }
+            addToast('success', `${ids.length} mensaje(s) actualizado(s)`);
+            setSelectedIds(new Set());
+        } catch (e) { console.error('Batch action error:', e); }
+    };
+
+    const categorizeMessage = (msg: EmailMessage): 'primary' | 'promotions' | 'social' => {
+        if (msg.category) return msg.category;
+        const text = `${msg.from} ${msg.subject} ${msg.body}`.toLowerCase();
+        const promoKeywords = ['oferta', 'descuento', 'promocion', 'promo', 'sale', 'offer', 'discount', 'newsletter', 'suscripcion', 'unsubscribe', 'marketing', 'noreply', 'no-reply'];
+        const socialKeywords = ['facebook', 'twitter', 'linkedin', 'instagram', 'social', 'notification', 'notificacion', 'invitacion', 'invite', 'network', 'connect'];
+        if (promoKeywords.some(k => text.includes(k))) return 'promotions';
+        if (socialKeywords.some(k => text.includes(k))) return 'social';
+        return 'primary';
+    };
+
+    const handleSnooze = async (msgId: string, duration: string) => {
+        const now = new Date();
+        let snoozedUntil: Date;
+        switch (duration) {
+            case '1h': snoozedUntil = new Date(now.getTime() + 3600000); break;
+            case '3h': snoozedUntil = new Date(now.getTime() + 10800000); break;
+            case 'tomorrow': snoozedUntil = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 8, 0); break;
+            case 'next_week': snoozedUntil = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7, 8, 0); break;
+            default: snoozedUntil = new Date(now.getTime() + 3600000);
+        }
+        try {
+            await updateDoc(doc(db, 'incoming_messages', msgId), { snoozedUntil: snoozedUntil.toISOString() });
+            addToast('success', `Mensaje pospuesto hasta ${snoozedUntil.toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`);
+            setShowSnoozeDialog(false);
+        } catch (e) { console.error('Snooze error:', e); }
+    };
+
+    const handleForward = (msg: EmailMessage) => {
+        const fwdBody = `\n\n---------- Mensaje reenviado ----------\nDe: ${msg.from}\nFecha: ${new Date(msg.receivedAt).toLocaleString()}\nAsunto: ${msg.subject}\nPara: ${msg.to}\n\n${msg.body.replace(/<[^>]*>?/gm, '')}`;
+        setComposeTo('');
+        setComposeSubject(`Fwd: ${msg.subject}`);
+        setComposeBody(fwdBody);
+        setComposeFiles([]);
+        setShowCompose(true);
+    };
+
+    const REACTION_EMOJIS = ['\uD83D\uDC4D', '\u2764\uFE0F', '\uD83D\uDE02', '\uD83D\uDE2E', '\uD83D\uDE22', '\uD83D\uDE4F'];
+
+    const toggleReaction = async (msgId: string, emoji: string) => {
+        const msg = messages.find(m => m.id === msgId);
+        if (!msg) return;
+        const userId = auth.currentUser?.uid || 'anonymous';
+        const existing = msg.reactions || [];
+        const alreadyReacted = existing.find(r => r.emoji === emoji && r.userId === userId);
+        let updated: typeof existing;
+        if (alreadyReacted) {
+            updated = existing.filter(r => !(r.emoji === emoji && r.userId === userId));
+        } else {
+            updated = [...existing, { emoji, userId, timestamp: new Date().toISOString() }];
+        }
+        try {
+            await updateDoc(doc(db, 'incoming_messages', msgId), { reactions: updated });
+            setShowReactionPicker(null);
+        } catch (e) { console.error('Reaction error:', e); }
+    };
+
     // Advanced Filtering
     const filteredMessages = messages.filter(m => {
-        // Mejorado: El filtro de cuenta debe considerar tanto el receptor como el emisor
         const matchesAccount = filterAccount === 'all' || m.to === filterAccount || m.from === filterAccount;
         const matchesSearch = !searchQuery ||
             [m.subject || '', m.from || '', m.body || ''].some(f => f.toLowerCase().includes(searchQuery.toLowerCase()));
 
         if (!matchesAccount || !matchesSearch) return false;
 
+        // Filter snoozed messages from inbox
+        if (m.snoozedUntil && new Date(m.snoozedUntil) > new Date() && currentFolder === 'inbox') return false;
+
         switch (currentFolder) {
-            case 'inbox': return !['ARCHIVED', 'SENT', 'DRAFT', 'TRASH'].includes(m.status);
+            case 'inbox': {
+                const isInbox = !['ARCHIVED', 'SENT', 'DRAFT', 'TRASH'].includes(m.status);
+                if (!isInbox) return false;
+                // Category filter (only in inbox Gmail layout)
+                if (layoutMode === 'gmail' && activeCategory !== 'primary') {
+                    return categorizeMessage(m) === activeCategory;
+                }
+                if (layoutMode === 'gmail' && activeCategory === 'primary') {
+                    return categorizeMessage(m) === 'primary';
+                }
+                return true;
+            }
             case 'sent': return m.status === 'SENT';
             case 'drafts': return m.status === 'DRAFT';
             case 'archived': return m.status === 'ARCHIVED';
@@ -489,6 +609,27 @@ const MailPage = () => {
     });
 
     const accounts = Array.from(new Set(messages.map(m => m.to))).filter(Boolean);
+
+    // These depend on filteredMessages being declared above
+    const selectAll = () => {
+        if (selectedIds.size === filteredMessages.length) {
+            setSelectedIds(new Set());
+        } else {
+            setSelectedIds(new Set(filteredMessages.map(m => m.id)));
+        }
+    };
+
+    const navigateMessage = (direction: 'prev' | 'next') => {
+        if (!selectedMessage) return;
+        const idx = filteredMessages.findIndex(m => m.id === selectedMessage.id);
+        if (idx === -1) return;
+        const newIdx = direction === 'prev' ? idx - 1 : idx + 1;
+        if (newIdx >= 0 && newIdx < filteredMessages.length) {
+            setSelectedMessage(filteredMessages[newIdx]);
+        }
+    };
+
+    const currentMessageIndex = selectedMessage ? filteredMessages.findIndex(m => m.id === selectedMessage.id) : -1;
 
     // ==========================================
     // RENDER LOGIC
@@ -1089,17 +1230,36 @@ const MailPage = () => {
                         <div className="flex-1 overflow-y-auto no-scrollbar">
                             {currentFolder === 'inbox' && (
                                 <div className="flex border-b border-slate-100">
-                                    {['Principal', 'Promociones', 'Social'].map((tab, i) => (
+                                    {[
+                                        { id: 'primary' as const, label: 'Principal', icon: Inbox },
+                                        { id: 'promotions' as const, label: 'Promociones', icon: Tag },
+                                        { id: 'social' as const, label: 'Social', icon: User },
+                                    ].map(tab => (
                                         <button
-                                            key={tab}
-                                            className={`px-8 py-4 text-sm font-medium relative transition-colors ${i === 0 ? 'text-[#0B57D0] border-b-[3px] border-[#0B57D0]' : 'text-slate-600 hover:bg-slate-50'}`}
+                                            key={tab.id}
+                                            onClick={() => setActiveCategory(tab.id)}
+                                            className={`px-8 py-4 text-sm font-medium relative transition-colors ${activeCategory === tab.id ? 'text-[#0B57D0] border-b-[3px] border-[#0B57D0]' : 'text-slate-600 hover:bg-slate-50'}`}
                                         >
                                             <div className="flex items-center gap-4">
-                                                {i === 0 && <Inbox size={18} />}
-                                                {tab}
+                                                <tab.icon size={18} />
+                                                {tab.label}
                                             </div>
                                         </button>
                                     ))}
+                                </div>
+                            )}
+                            {/* Batch actions toolbar */}
+                            {selectedIds.size > 0 && (
+                                <div className="flex items-center gap-2 px-4 py-2 bg-[#D3E3FD] border-b border-[#0B57D0]/20">
+                                    <button onClick={selectAll} className="p-1.5 hover:bg-[#0B57D0]/10 rounded text-[#0B57D0]">
+                                        <CheckSquare size={18} />
+                                    </button>
+                                    <span className="text-xs font-bold text-[#041E49] mr-2">{selectedIds.size} seleccionado(s)</span>
+                                    <button onClick={() => batchAction('archive')} title="Archivar" className="p-1.5 hover:bg-[#0B57D0]/10 rounded text-[#041E49]"><Archive size={16} /></button>
+                                    <button onClick={() => batchAction('delete')} title="Eliminar" className="p-1.5 hover:bg-[#0B57D0]/10 rounded text-[#041E49]"><Trash2 size={16} /></button>
+                                    <button onClick={() => batchAction('read')} title="Marcar leido" className="p-1.5 hover:bg-[#0B57D0]/10 rounded text-[#041E49]"><Mail size={16} /></button>
+                                    <button onClick={() => batchAction('star')} title="Destacar" className="p-1.5 hover:bg-[#0B57D0]/10 rounded text-[#041E49]"><Star size={16} /></button>
+                                    <button onClick={() => setSelectedIds(new Set())} className="ml-auto p-1.5 hover:bg-[#0B57D0]/10 rounded text-[#041E49]"><X size={16} /></button>
                                 </div>
                             )}
                             {filteredMessages.length > 0 ? filteredMessages.map(msg => {
@@ -1116,8 +1276,18 @@ const MailPage = () => {
                                         <div className="flex items-start md:items-center gap-4 w-full min-w-0">
                                             {/* Left side: Selection and Star (Desktop only) */}
                                             <div className="hidden md:flex shrink-0 items-center gap-3">
-                                                <div className="w-5 h-5 border-2 border-slate-300 rounded-sm group-hover:border-slate-400" />
-                                                <Star size={18} className="text-slate-300 hover:text-yellow-400" />
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); toggleSelect(msg.id); }}
+                                                    className={`w-5 h-5 border-2 rounded-sm transition-all flex items-center justify-center ${selectedIds.has(msg.id) ? 'bg-[#0B57D0] border-[#0B57D0] text-white' : 'border-slate-300 group-hover:border-slate-400'}`}
+                                                >
+                                                    {selectedIds.has(msg.id) && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>}
+                                                </button>
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); toggleStar(msg.id); }}
+                                                    className={`transition-colors ${msg.starred ? 'text-yellow-400' : 'text-slate-300 hover:text-yellow-400'}`}
+                                                >
+                                                    <Star size={18} fill={msg.starred ? 'currentColor' : 'none'} />
+                                                </button>
                                             </div>
 
                                             {/* Mobile Avatar */}
@@ -1188,9 +1358,9 @@ const MailPage = () => {
                                             {[
                                                 { icon: Archive, label: 'Archivar', action: () => handleArchive(selectedMessage) },
                                                 { icon: Trash2, label: 'Eliminar', action: () => handleDelete(selectedMessage) },
-                                                { icon: Mail, label: 'Marcar no leído', action: () => markAsUnread(selectedMessage.id) },
-                                                { icon: Clock, label: 'Pospuesto', action: () => { } },
-                                                { icon: Menu, label: 'Más', action: () => { } },
+                                                { icon: Mail, label: 'Marcar no leido', action: () => markAsUnread(selectedMessage.id) },
+                                                { icon: AlarmClock, label: 'Posponer', action: () => setShowSnoozeDialog(true) },
+                                                { icon: MoreVertical, label: 'Mas', action: () => setShowMoreMenu(!showMoreMenu) },
                                             ].map((btn, i) => (
                                                 <button
                                                     key={i}
@@ -1202,12 +1372,63 @@ const MailPage = () => {
                                                 </button>
                                             ))}
                                         </div>
+                                        {/* More menu dropdown */}
+                                        {showMoreMenu && (
+                                            <div className="absolute top-10 left-40 bg-white rounded-lg shadow-xl border border-slate-200 py-1 z-50 min-w-[200px]">
+                                                {[
+                                                    { label: 'Marcar como spam', action: () => { handleDelete(selectedMessage); setShowMoreMenu(false); } },
+                                                    { label: 'Marcar como leido', action: () => { markAsRead(selectedMessage.id); setShowMoreMenu(false); } },
+                                                    { label: 'Destacar', action: () => { toggleStar(selectedMessage.id); setShowMoreMenu(false); } },
+                                                    { label: 'Imprimir', action: () => { window.print(); setShowMoreMenu(false); } },
+                                                ].map((item, i) => (
+                                                    <button key={i} onClick={item.action} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors">
+                                                        {item.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                        {/* Snooze dialog */}
+                                        {showSnoozeDialog && (
+                                            <div className="absolute top-10 left-28 bg-white rounded-xl shadow-xl border border-slate-200 py-2 z-50 min-w-[220px]">
+                                                <p className="px-4 py-2 text-xs font-bold text-slate-500 uppercase tracking-wider">Posponer hasta</p>
+                                                {[
+                                                    { label: 'En 1 hora', value: '1h' },
+                                                    { label: 'En 3 horas', value: '3h' },
+                                                    { label: 'Manana, 8:00 AM', value: 'tomorrow' },
+                                                    { label: 'Proxima semana', value: 'next_week' },
+                                                ].map(opt => (
+                                                    <button
+                                                        key={opt.value}
+                                                        onClick={() => handleSnooze(selectedMessage.id, opt.value)}
+                                                        className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-[#D3E3FD] transition-colors flex items-center gap-3"
+                                                    >
+                                                        <AlarmClock size={16} className="text-slate-400" />
+                                                        {opt.label}
+                                                    </button>
+                                                ))}
+                                                <button onClick={() => setShowSnoozeDialog(false)} className="w-full text-left px-4 py-2 text-xs text-slate-400 hover:bg-slate-50 mt-1 border-t border-slate-100">
+                                                    Cancelar
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="hidden sm:flex items-center gap-4 text-xs text-slate-500 font-medium">
-                                        <span>4 de 37</span>
+                                        <span>{currentMessageIndex >= 0 ? `${currentMessageIndex + 1} de ${filteredMessages.length}` : ''}</span>
                                         <div className="flex items-center gap-1">
-                                            <button className="p-2 hover:bg-slate-100 rounded-full text-slate-300"><ChevronRight size={18} className="rotate-180" /></button>
-                                            <button className="p-2 hover:bg-slate-100 rounded-full text-slate-600"><ChevronRight size={18} /></button>
+                                            <button
+                                                onClick={() => navigateMessage('prev')}
+                                                disabled={currentMessageIndex <= 0}
+                                                className={`p-2 hover:bg-slate-100 rounded-full transition-all ${currentMessageIndex <= 0 ? 'text-slate-300' : 'text-slate-600'}`}
+                                            >
+                                                <ChevronRight size={18} className="rotate-180" />
+                                            </button>
+                                            <button
+                                                onClick={() => navigateMessage('next')}
+                                                disabled={currentMessageIndex >= filteredMessages.length - 1}
+                                                className={`p-2 hover:bg-slate-100 rounded-full transition-all ${currentMessageIndex >= filteredMessages.length - 1 ? 'text-slate-300' : 'text-slate-600'}`}
+                                            >
+                                                <ChevronRight size={18} />
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
@@ -1221,7 +1442,9 @@ const MailPage = () => {
                                                 <span className="ml-2 px-1.5 py-0.5 bg-slate-100 text-slate-500 text-[10px] font-medium rounded uppercase tracking-wider inline-block align-middle">Recibidos</span>
                                             </h1>
                                             <div className="flex items-center gap-2 md:gap-4 ml-4">
-                                                <button className="p-2 hover:bg-slate-100 rounded-full text-slate-400"><Star size={20} /></button>
+                                                <button onClick={() => toggleStar(selectedMessage.id)} className={`p-2 hover:bg-slate-100 rounded-full transition-colors ${selectedMessage.starred ? 'text-yellow-400' : 'text-slate-400'}`}>
+                                                    <Star size={20} fill={selectedMessage.starred ? 'currentColor' : 'none'} />
+                                                </button>
                                             </div>
                                         </div>
 
@@ -1239,15 +1462,60 @@ const MailPage = () => {
                                                     <div className="flex items-center gap-3">
                                                         <span className="text-xs text-slate-500">{new Date(selectedMessage.receivedAt).toLocaleString([], { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                                                         <div className="flex items-center gap-1">
-                                                            <button className="p-1 hover:bg-slate-100 rounded text-slate-400"><Star size={18} /></button>
-                                                            <button className="p-1 hover:bg-slate-100 rounded text-slate-400"><Smile size={18} /></button>
-                                                            <button className="p-1 hover:bg-slate-100 rounded text-slate-400"><ArrowRight size={18} className="rotate-180" /></button>
+                                                            <button onClick={() => toggleStar(selectedMessage.id)} className={`p-1 hover:bg-slate-100 rounded transition-colors ${selectedMessage.starred ? 'text-yellow-400' : 'text-slate-400'}`}>
+                                                                <Star size={18} fill={selectedMessage.starred ? 'currentColor' : 'none'} />
+                                                            </button>
+                                                            <button onClick={() => setShowReactionPicker(showReactionPicker === selectedMessage.id ? null : selectedMessage.id)} className="p-1 hover:bg-slate-100 rounded text-slate-400 relative">
+                                                                <Smile size={18} />
+                                                            </button>
+                                                            <button onClick={() => { setReplyText(''); setShowCompose(true); setComposeTo(selectedMessage.from); setComposeSubject(`Re: ${selectedMessage.subject}`); }} className="p-1 hover:bg-slate-100 rounded text-slate-400">
+                                                                <ArrowRight size={18} className="rotate-180" />
+                                                            </button>
                                                         </div>
                                                     </div>
                                                 </div>
-                                                <p className="text-xs text-slate-500 mt-0.5">para {selectedMessage.to === senderAccount ? 'mí' : selectedMessage.to}</p>
+                                                <p className="text-xs text-slate-500 mt-0.5">para {selectedMessage.to === senderAccount ? 'mi' : selectedMessage.to}</p>
                                             </div>
                                         </div>
+
+                                        {/* Reaction Picker */}
+                                        {showReactionPicker === selectedMessage.id && (
+                                            <div className="mb-6 flex items-center gap-1 p-2 bg-white rounded-full shadow-lg border border-slate-200 w-fit">
+                                                {REACTION_EMOJIS.map(emoji => (
+                                                    <button
+                                                        key={emoji}
+                                                        onClick={() => toggleReaction(selectedMessage.id, emoji)}
+                                                        className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 text-xl transition-all hover:scale-125"
+                                                    >
+                                                        {emoji}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        {/* Existing Reactions Display */}
+                                        {selectedMessage.reactions && selectedMessage.reactions.length > 0 && (
+                                            <div className="mb-6 flex flex-wrap gap-2">
+                                                {Object.entries(
+                                                    selectedMessage.reactions.reduce((acc, r) => {
+                                                        acc[r.emoji] = (acc[r.emoji] || 0) + 1;
+                                                        return acc;
+                                                    }, {} as Record<string, number>)
+                                                ).map(([emoji, count]) => (
+                                                    <button
+                                                        key={emoji}
+                                                        onClick={() => toggleReaction(selectedMessage.id, emoji)}
+                                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm transition-all hover:shadow-sm ${selectedMessage.reactions?.some(r => r.emoji === emoji && r.userId === (auth.currentUser?.uid || 'anonymous'))
+                                                                ? 'bg-[#D3E3FD] border-[#0B57D0]/30 text-[#041E49]'
+                                                                : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                                                            }`}
+                                                    >
+                                                        <span className="text-base">{emoji}</span>
+                                                        <span className="text-xs font-bold">{count}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
 
                                         {/* Email Content */}
                                         <div className="mb-12">
@@ -1287,8 +1555,11 @@ const MailPage = () => {
                                             >
                                                 <ArrowRight size={18} className="rotate-180" /> Responder
                                             </button>
-                                            <button className="flex items-center gap-3 px-6 py-2.5 rounded-full border border-[#747775] text-[#1f1f1f] text-sm font-medium hover:bg-slate-50 transition-all">
-                                                <ArrowRight size={18} /> Reenviar
+                                            <button
+                                                onClick={() => handleForward(selectedMessage)}
+                                                className="flex items-center gap-3 px-6 py-2.5 rounded-full border border-[#747775] text-[#1f1f1f] text-sm font-medium hover:bg-slate-50 transition-all"
+                                            >
+                                                <Share2 size={18} /> Reenviar
                                             </button>
                                         </div>
                                     </div>
