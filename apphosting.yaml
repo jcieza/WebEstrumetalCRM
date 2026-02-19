@@ -1,6 +1,5 @@
-# Firebase App Hosting configuration
-# This file maps your cloud secrets to environment variables accessible by the code.
-# Triggering new build after secret configuration.
+# Triggering new build for Gravatar fix verification.
+# Date: 2026-02-19T15:55:00-05:00
 
 env:
   # Secrets (Configured in Google Cloud Secret Manager via Firebase Console)
