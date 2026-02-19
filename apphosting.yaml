@@ -40,3 +40,15 @@ env:
     availability:
       - BUILD
       - RUNTIME
+  
+  # Gravatar Integration (OAuth)
+  - variable: GRAVATAR_CLIENT_ID
+    secret: GRAVATAR_CLIENT_ID
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: GRAVATAR_CLIENT_SECRET
+    secret: GRAVATAR_CLIENT_SECRET
+    availability:
+      - BUILD
+      - RUNTIME
