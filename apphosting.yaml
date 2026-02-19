@@ -1,5 +1,6 @@
 # Firebase App Hosting configuration
 # This file maps your cloud secrets to environment variables accessible by the code.
+# Triggering new build after secret configuration.
 
 env:
   # Secrets (Configured in Google Cloud Secret Manager via Firebase Console)
