@@ -83,11 +83,16 @@ export const getGravatarHash = async (email: string) => {
 
 /**
  * Fetch full profile JSON using Gravatar API v3
+ * Si se proporciona un token OAuth, se obtienen datos adicionales (links, gallery, timezone, etc.)
  */
-export const fetchGravatarProfile = async (email: string) => {
+export const fetchGravatarProfile = async (email: string, token?: string) => {
     try {
         const hash = await getGravatarHash(email);
-        const response = await fetch(`https://api.gravatar.com/v3/profiles/${hash}`);
+        const headers: Record<string, string> = {};
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+        const response = await fetch(`https://api.gravatar.com/v3/profiles/${hash}`, { headers });
         if (!response.ok) {
             if (response.status !== 404) {
                 console.warn(`Gravatar API v3 returned ${response.status} for ${email}`);

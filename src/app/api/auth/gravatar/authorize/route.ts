@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
 
     if (!CLIENT_ID) {
         console.error('GRAVATAR_CLIENT_ID is not configured in environment variables.');
-        return NextResponse.redirect(new URL('/crm/mail?gravatar_status=error&error=not_configured', baseUrl));
+        return NextResponse.redirect(new URL('/?gravatar_status=error&error=not_configured', baseUrl));
     }
 
     const authUrl = `https://public-api.wordpress.com/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=auth+gravatar-profile:read+gravatar-profile:manage&state=${encodeURIComponent(baseUrl)}`;

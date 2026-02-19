@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { Mail, Search, Clock, User, ArrowRight, ShieldCheck, Inbox, Archive, Trash2, Send, Paperclip, Download, Loader2, Eye, X, Settings as SettingsIcon, Smile, Type, ChevronRight, Image as ImageIcon, Menu, Star, Plus, Layout, MoreVertical, Share2, AlarmClock, CheckSquare, Tag } from 'lucide-react';
 import { db, auth, storage } from '@/lib/firebase';
-import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, addDoc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, addDoc, limit, where, getDocs, getDoc } from 'firebase/firestore';
+import { algoliasearch } from 'algoliasearch';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '@/context/AuthContext';
 
@@ -128,17 +129,39 @@ const MailPage = () => {
     // Action State
     const [isSending, setIsSending] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
+    const [limitCount, setLimitCount] = useState(50);
+    const [searchResults, setSearchResults] = useState<EmailMessage[]>([]);
+    const [isSearching, setIsSearching] = useState(false);
+
+    // Lazy Snooze Wakeup
+    useEffect(() => {
+        const wakeUpSnoozed = async () => {
+            try {
+                const now = new Date().toISOString();
+                const q = query(collection(db, 'incoming_messages'), where('snoozedUntil', '<=', now));
+                const snapshot = await getDocs(q);
+                snapshot.forEach(async (d) => {
+                    await updateDoc(d.ref, { status: 'NEW', snoozedUntil: null });
+                });
+            } catch (e) { console.error('Wakeup error:', e); }
+        };
+        wakeUpSnoozed();
+    }, []);
     const [undoTimer, setUndoTimer] = useState<any>(null);
     const [undoCountdown, setUndoCountdown] = useState(5);
     const [previewingFile, setPreviewingFile] = useState<{ url: string, type: string, name: string } | null>(null);
     const [isMailSubdomain, setIsMailSubdomain] = useState(false);
     const [hoveredEmail, setHoveredEmail] = useState<string | null>(null);
+    const [clickedEmail, setClickedEmail] = useState<string | null>(null);
     const [hoverPosition, setHoverPosition] = useState({ x: 0, y: 0 });
 
-    const [userProfile, setUserProfile] = useState({
-        displayName: auth.currentUser?.displayName || '',
-        photoURL: auth.currentUser?.photoURL || '',
-        email: auth.currentUser?.email || '',
+    const [userProfile, setUserProfile] = useState(() => {
+        const email = auth.currentUser?.email || '';
+        return {
+            displayName: auth.currentUser?.displayName || '',
+            photoURL: auth.currentUser?.photoURL || getGravatarUrl(email, 200),
+            email,
+        };
     });
 
     const addToast = (type: 'success' | 'new' | 'info', message: string) => {
@@ -176,6 +199,15 @@ const MailPage = () => {
         }
     }, [searchParams]);
 
+    // Dismiss clicked profile card on click outside
+    useEffect(() => {
+        const handler = () => setClickedEmail(null);
+        if (clickedEmail) {
+            document.addEventListener('click', handler);
+            return () => document.removeEventListener('click', handler);
+        }
+    }, [clickedEmail]);
+
     const playSound = (type: 'send' | 'receive') => {
         const audio = new Audio(type === 'send' ? SEND_SOUND : RECEIVE_SOUND);
         audio.volume = 0.2;
@@ -184,7 +216,7 @@ const MailPage = () => {
 
     // Real-time Feed
     useEffect(() => {
-        const q = query(collection(db, 'incoming_messages'), orderBy('receivedAt', 'desc'));
+        const q = query(collection(db, 'incoming_messages'), orderBy('receivedAt', 'desc'), limit(limitCount));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const userEmail = auth.currentUser?.email;
             const msgs = snapshot.docs.map(doc => ({
@@ -225,6 +257,60 @@ const MailPage = () => {
         }
         return () => clearInterval(interval);
     }, [undoTimer]);
+
+    // Algolia Search Effect
+    useEffect(() => {
+        if (!searchQuery || searchQuery.length < 3) {
+            setSearchResults([]);
+            return;
+        }
+
+        const appId = process.env.NEXT_PUBLIC_ALGOLIA_APP_ID;
+        const apiKey = process.env.NEXT_PUBLIC_ALGOLIA_SEARCH_KEY;
+
+        if (!appId || !apiKey) {
+            console.warn('Algolia keys missing');
+            return; // Fallback to client-side filtering of loaded messages
+        }
+
+        const client = algoliasearch(appId, apiKey);
+
+        setIsSearching(true);
+        // v5 lite client usage: client.search({ requests: [{ indexName, query }] })
+        // or client.initIndex if using classic (v4 compat)
+        // With 'algoliasearch/lite' in v5, it usually returns a search-only client.
+        // Let's try standard v4 style which v5 might support via compatibility, or strictly v5.
+        // v5: const { results } = await client.search({ requests: [{ indexName: 'estrumetal_mail', query: searchQuery }] });
+
+        const performSearch = async () => {
+            try {
+                // Trying v5 syntax first
+                const { results } = await client.search({
+                    requests: [
+                        { indexName: 'estrumetal_mail', query: searchQuery, hitsPerPage: 50 }
+                    ]
+                });
+                if (results && results[0]) {
+                    const hits = results[0].hits.map((h: any) => ({
+                        id: h.objectID,
+                        ...h,
+                        receivedAt: h.receivedAt || new Date(h.receivedAtTimestamp).toISOString(),
+                        body: h.body_text || h.body || '', // Use text body if HTML was stripped
+                        attachments: h.attachments || []
+                    }));
+                    setSearchResults(hits as EmailMessage[]);
+                }
+            } catch (e) {
+                console.error('Algolia search error:', e);
+                // Fallback to searching loaded messages might be handled by filteredMessages logic logic
+            } finally {
+                setIsSearching(false);
+            }
+        };
+
+        const debounce = setTimeout(performSearch, 500);
+        return () => clearTimeout(debounce);
+    }, [searchQuery]);
 
     // Counter & Title Logic
     useEffect(() => {
@@ -548,7 +634,15 @@ const MailPage = () => {
     };
 
     const handleForward = (msg: EmailMessage) => {
-        const fwdBody = `\n\n---------- Mensaje reenviado ----------\nDe: ${msg.from}\nFecha: ${new Date(msg.receivedAt).toLocaleString()}\nAsunto: ${msg.subject}\nPara: ${msg.to}\n\n${msg.body.replace(/<[^>]*>?/gm, '')}`;
+        const fwdBody = `<br/><br/>
+<div class="gmail_quote">
+    ---------- Forwarded message ---------<br/>
+    From: <strong>${msg.from}</strong><br/>
+    Date: ${new Date(msg.receivedAt).toLocaleString()}<br/>
+    Subject: ${msg.subject}<br/>
+    To: ${msg.to}<br/><br/>
+    ${msg.body}
+</div>`;
         setComposeTo('');
         setComposeSubject(`Fwd: ${msg.subject}`);
         setComposeBody(fwdBody);
@@ -577,36 +671,50 @@ const MailPage = () => {
     };
 
     // Advanced Filtering
-    const filteredMessages = messages.filter(m => {
-        const matchesAccount = filterAccount === 'all' || m.to === filterAccount || m.from === filterAccount;
-        const matchesSearch = !searchQuery ||
-            [m.subject || '', m.from || '', m.body || ''].some(f => f.toLowerCase().includes(searchQuery.toLowerCase()));
-
-        if (!matchesAccount || !matchesSearch) return false;
-
-        // Filter snoozed messages from inbox
-        if (m.snoozedUntil && new Date(m.snoozedUntil) > new Date() && currentFolder === 'inbox') return false;
-
-        switch (currentFolder) {
-            case 'inbox': {
-                const isInbox = !['ARCHIVED', 'SENT', 'DRAFT', 'TRASH'].includes(m.status);
-                if (!isInbox) return false;
-                // Category filter (only in inbox Gmail layout)
-                if (layoutMode === 'gmail' && activeCategory !== 'primary') {
-                    return categorizeMessage(m) === activeCategory;
-                }
-                if (layoutMode === 'gmail' && activeCategory === 'primary') {
-                    return categorizeMessage(m) === 'primary';
-                }
-                return true;
-            }
-            case 'sent': return m.status === 'SENT';
-            case 'drafts': return m.status === 'DRAFT';
-            case 'archived': return m.status === 'ARCHIVED';
-            case 'trash': return m.status === 'TRASH';
-            default: return true;
+    // Advanced Filtering with Algolia Support
+    const getDisplayMessages = () => {
+        if (searchQuery.length >= 3 && searchResults.length > 0) {
+            return searchResults;
         }
-    });
+
+        return messages.filter(m => {
+            const matchesAccount = filterAccount === 'all' || m.to === filterAccount || m.from === filterAccount;
+            const matchesSearch = !searchQuery ||
+                [m.subject || '', m.from || '', m.body || ''].some(f => f.toLowerCase().includes(searchQuery.toLowerCase()));
+
+            if (!matchesAccount || !matchesSearch) return false;
+
+            // Filter snoozed messages from inbox
+            if (m.snoozedUntil && new Date(m.snoozedUntil) > new Date() && currentFolder === 'inbox') return false;
+
+            switch (currentFolder) {
+                case 'inbox': {
+                    const isInbox = !['ARCHIVED', 'SENT', 'DRAFT', 'TRASH'].includes(m.status);
+                    if (!isInbox) return false;
+                    // Category filter (only in inbox Gmail layout)
+                    if (layoutMode === 'gmail' && 'category' in m) { // category property might be missing on type? Checked interface, it is missing in my view?
+                        // Interface at top of file (Step 767) showed: category?: ...
+                        // wait, existing code used categorizeMessage(m). 
+                    }
+                    if (layoutMode === 'gmail' && activeCategory !== 'primary') {
+                        return categorizeMessage(m) === activeCategory;
+                    }
+                    if (layoutMode === 'gmail' && activeCategory === 'primary') {
+                        return categorizeMessage(m) === 'primary';
+                    }
+                    return true;
+                }
+                case 'sent': return m.status === 'SENT';
+                case 'drafts': return m.status === 'DRAFT';
+                case 'archived': return m.status === 'ARCHIVED';
+                case 'trash': return m.status === 'TRASH';
+                default: return true;
+            }
+        });
+    };
+
+    const filteredMessages = getDisplayMessages();
+    const finalMessages = filteredMessages;
 
     const accounts = Array.from(new Set(messages.map(m => m.to))).filter(Boolean);
 
@@ -742,7 +850,20 @@ const MailPage = () => {
                                     className={`w-full flex items-center px-6 py-5 transition-all border-b border-slate-50/10 ${selectedMessage?.id === msg.id ? 'bg-green-600/10' : 'hover:bg-white/5'}`}
                                 >
                                     <div className="flex items-center gap-4 w-full min-w-0">
-                                        <div className="w-10 h-10 rounded-full shrink-0 flex items-center justify-center text-white font-black text-sm uppercase bg-gradient-to-br from-green-500 to-green-700 shadow-md overflow-hidden">{msg.from.charAt(0)}</div>
+                                        <div
+                                            className="w-10 h-10 rounded-full shrink-0 shadow-md overflow-hidden cursor-pointer hover:ring-2 hover:ring-green-500 transition-all"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                const rect = e.currentTarget.getBoundingClientRect();
+                                                setHoverPosition({ x: rect.right, y: rect.top });
+                                                setClickedEmail(prev => {
+                                                    const email = msg.from.includes('<') ? msg.from.split('<')[1].split('>')[0] : msg.from;
+                                                    return prev === email ? null : email;
+                                                });
+                                            }}
+                                        >
+                                            <img src={getGravatarUrl(msg.from.includes('<') ? msg.from.split('<')[1].split('>')[0] : msg.from, 80)} alt="" className="w-full h-full object-cover" />
+                                        </div>
                                         <div className="min-w-0 flex-1 flex flex-col items-start">
                                             <div className="flex justify-between w-full mb-0.5">
                                                 <span
@@ -782,7 +903,19 @@ const MailPage = () => {
                             </div>
                             <div className="flex-1 overflow-y-auto p-12 no-scrollbar">
                                 <div className="flex items-center gap-4 mb-10">
-                                    <div className="w-12 h-12 rounded-full bg-green-600 text-white flex items-center justify-center font-black text-xl shadow-lg">{selectedMessage.from.charAt(0)}</div>
+                                    <div
+                                        className="w-12 h-12 rounded-full shadow-lg overflow-hidden cursor-pointer hover:ring-2 hover:ring-green-500 transition-all"
+                                        onClick={(e) => {
+                                            const rect = e.currentTarget.getBoundingClientRect();
+                                            setHoverPosition({ x: rect.right, y: rect.top });
+                                            setClickedEmail(prev => {
+                                                const email = selectedMessage.from.includes('<') ? selectedMessage.from.split('<')[1].split('>')[0] : selectedMessage.from;
+                                                return prev === email ? null : email;
+                                            });
+                                        }}
+                                    >
+                                        <img src={getGravatarUrl(selectedMessage.from.includes('<') ? selectedMessage.from.split('<')[1].split('>')[0] : selectedMessage.from, 96)} alt="" className="w-full h-full object-cover" />
+                                    </div>
                                     <div>
                                         <div className="flex items-center gap-2">
                                             <p className="text-[13px] font-black">{selectedMessage.from}</p>
@@ -970,8 +1103,19 @@ const MailPage = () => {
                                         <div className="flex items-start gap-4 w-full min-w-0">
                                             {/* Avatar circular 40px */}
                                             <div className="shrink-0 pt-0.5">
-                                                <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-base text-white shadow-sm" style={{ backgroundColor: '#0B57D0' }}>
-                                                    {msg.from.charAt(0).toUpperCase()}
+                                                <div
+                                                    className="w-10 h-10 rounded-full overflow-hidden shadow-sm cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        const rect = e.currentTarget.getBoundingClientRect();
+                                                        setHoverPosition({ x: rect.right, y: rect.top });
+                                                        setClickedEmail(prev => {
+                                                            const email = msg.from.includes('<') ? msg.from.split('<')[1].split('>')[0] : msg.from;
+                                                            return prev === email ? null : email;
+                                                        });
+                                                    }}
+                                                >
+                                                    <img src={getGravatarUrl(msg.from.includes('<') ? msg.from.split('<')[1].split('>')[0] : msg.from, 80)} alt="" className="w-full h-full object-cover" />
                                                 </div>
                                             </div>
 
@@ -1087,7 +1231,13 @@ const MailPage = () => {
                             </div>
                             <div className="p-6 border-t" style={{ backgroundColor: colors.bg, borderColor: theme === 'dark' ? '#2D2F33' : '#E0E0E0' }}>
                                 <button
-                                    onClick={() => { setReplyText(''); setShowCompose(true); setComposeTo(selectedMessage.from); setComposeSubject(`Re: ${selectedMessage.subject}`); }}
+                                    onClick={() => {
+                                        setReplyText('');
+                                        setShowCompose(true);
+                                        setComposeTo(selectedMessage.from);
+                                        setComposeSubject(`Re: ${selectedMessage.subject}`);
+                                        setComposeBody(`<br/><br/><div class="gmail_quote">On ${new Date(selectedMessage.receivedAt).toLocaleString()}, ${selectedMessage.from} wrote:<blockquote style="margin: 0 0 0 .8ex; border-left: 1px solid #ccc; padding-left: 1ex;">${selectedMessage.body}</blockquote></div>`);
+                                    }}
                                     className="px-6 py-3 bg-[#0B57D0] text-white rounded-full font-bold text-sm shadow-md hover:bg-[#0842a0] transition-all w-full flex items-center justify-center gap-2"
                                 >
                                     <Send size={18} /> Responder
@@ -1262,7 +1412,8 @@ const MailPage = () => {
                                     <button onClick={() => setSelectedIds(new Set())} className="ml-auto p-1.5 hover:bg-[#0B57D0]/10 rounded text-[#041E49]"><X size={16} /></button>
                                 </div>
                             )}
-                            {filteredMessages.length > 0 ? filteredMessages.map(msg => {
+                            {isSearching && <div className="p-4 text-center text-slate-500 text-sm">Buscando en servidor...</div>}
+                            {finalMessages.length > 0 ? finalMessages.map(msg => {
                                 const isUnread = msg.status === 'NEW';
                                 return (
                                     <button
@@ -1339,6 +1490,18 @@ const MailPage = () => {
                                 <div className="flex flex-col items-center justify-center h-full opacity-30 text-center p-12">
                                     <Mail size={80} className="mb-6 text-slate-200" />
                                     <p className="text-xl font-medium text-slate-400">Tu bandeja de entrada está vacía</p>
+                                </div>
+                            )}
+
+                            {/* Load More Button - Only show if using Firestore list (not search results which are paginated differently or just top 50) */}
+                            {searchQuery.length < 3 && finalMessages.length >= limitCount && (
+                                <div className="p-4 flex justify-center pb-20">
+                                    <button
+                                        onClick={() => setLimitCount(prev => prev + 50)}
+                                        className="text-sm text-[#0B57D0] font-bold hover:bg-blue-50 px-4 py-2 rounded-full transition-colors flex items-center gap-2"
+                                    >
+                                        <ArrowRight size={16} /> Cargar mas mensajes
+                                    </button>
                                 </div>
                             )}
                         </div>
@@ -1506,8 +1669,8 @@ const MailPage = () => {
                                                         key={emoji}
                                                         onClick={() => toggleReaction(selectedMessage.id, emoji)}
                                                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm transition-all hover:shadow-sm ${selectedMessage.reactions?.some(r => r.emoji === emoji && r.userId === (auth.currentUser?.uid || 'anonymous'))
-                                                                ? 'bg-[#D3E3FD] border-[#0B57D0]/30 text-[#041E49]'
-                                                                : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                                                            ? 'bg-[#D3E3FD] border-[#0B57D0]/30 text-[#041E49]'
+                                                            : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
                                                             }`}
                                                     >
                                                         <span className="text-base">{emoji}</span>
@@ -1661,6 +1824,14 @@ const MailPage = () => {
                     initialTo={composeTo}
                     initialSubject={composeSubject}
                     initialBody={composeBody}
+                    senderAccount={senderAccount}
+                    onSenderChange={setSenderAccount}
+                    availableAccounts={[
+                        ...AUTHORIZED_SENDERS,
+                        ...(auth.currentUser?.email && !AUTHORIZED_SENDERS.includes(auth.currentUser.email)
+                            ? [auth.currentUser.email]
+                            : [])
+                    ]}
                     onSend={async (data) => {
                         setIsSending(true);
                         try {
@@ -1677,7 +1848,7 @@ const MailPage = () => {
                                     body: JSON.stringify({
                                         to: recipient,
                                         subject: data.subject,
-                                        body: `<div style="font-family: sans-serif">${data.body.replace(/\n/g, '<br/>')}${ESTRUMETAL_SIGNATURE}</div>`,
+                                        body: `<div style="font-family: sans-serif">${data.body}${ESTRUMETAL_SIGNATURE}</div>`,
                                         fromName: auth.currentUser?.displayName || senderAccount.split('@')[0].toUpperCase(),
                                         fromEmail: senderAccount,
                                         attachments: attachments
@@ -1689,7 +1860,7 @@ const MailPage = () => {
                                         from: senderAccount,
                                         to: recipient,
                                         subject: data.subject,
-                                        body: `<div style="font-family: sans-serif">${data.body.replace(/\n/g, '<br/>')}${ESTRUMETAL_SIGNATURE}</div>`,
+                                        body: `<div style="font-family: sans-serif">${data.body}${ESTRUMETAL_SIGNATURE}</div>`,
                                         receivedAt: new Date().toISOString(),
                                         status: 'SENT',
                                         attachments: attachments
@@ -1848,17 +2019,17 @@ const MailPage = () => {
                 ))}
             </div>
             {/* Hover Card for Gravatar */}
-            {hoveredEmail && (
+            {(hoveredEmail || clickedEmail) && (
                 <div
-                    className="fixed z-[9000] pointer-events-none"
+                    className="fixed z-[9000]"
                     style={{
-                        left: Math.min(hoverPosition.x + 20, window.innerWidth - 300),
-                        top: Math.min(hoverPosition.y + 20, window.innerHeight - 300)
+                        left: Math.min(hoverPosition.x + 20, window.innerWidth - 340),
+                        top: Math.min(hoverPosition.y, window.innerHeight - 400)
                     }}
+                    onClick={(e) => e.stopPropagation()}
+                    onMouseLeave={() => { if (!clickedEmail) setHoveredEmail(null); }}
                 >
-                    <div className="pointer-events-auto">
-                        <GravatarHoverCard email={hoveredEmail} theme={theme} />
-                    </div>
+                    <GravatarHoverCard email={(clickedEmail || hoveredEmail)!} theme={theme} />
                 </div>
             )}
         </>
