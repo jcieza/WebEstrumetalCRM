@@ -92,6 +92,7 @@ export default function CostStructurePage() {
     const [labor, setLabor] = useState<LaborItem[]>(initialLabor);
     const [extraData, setExtraData] = useState<CostItem[]>(initialExtraData);
     const [exchangeRate, setExchangeRate] = useState(3.75);
+    const [materialCushion, setMaterialCushion] = useState(0.20); // 20% safety margin
     const [displayCurrency, setDisplayCurrency] = useState<'PEN' | 'USD'>('PEN');
     const [isLoaded, setIsLoaded] = useState(false);
 
@@ -107,6 +108,7 @@ export default function CostStructurePage() {
                 if (data.labor) setLabor(data.labor);
                 if (data.extraData) setExtraData(data.extraData);
                 if (data.exchangeRate) setExchangeRate(data.exchangeRate);
+                if (data.materialCushion !== undefined) setMaterialCushion(data.materialCushion);
                 if (data.displayCurrency) setDisplayCurrency(data.displayCurrency);
             } catch (e) {
                 console.error("Error loading saved data", e);
@@ -124,11 +126,12 @@ export default function CostStructurePage() {
                 labor,
                 extraData,
                 exchangeRate,
+                materialCushion,
                 displayCurrency
             };
             localStorage.setItem('cost_structure_data_v3', JSON.stringify(data));
         }
-    }, [fabricacion, planchas, materiales, labor, extraData, exchangeRate, displayCurrency, isLoaded]);
+    }, [fabricacion, planchas, materiales, labor, extraData, exchangeRate, materialCushion, displayCurrency, isLoaded]);
 
     // --- Calculations ---
     const getSubtotal = (items: CostItem[], targetCurrency: 'PEN' | 'USD') => {
@@ -142,7 +145,12 @@ export default function CostStructurePage() {
 
     const totalFabPEN = useMemo(() => getSubtotal(fabricacion, 'PEN'), [fabricacion, exchangeRate]);
     const totalPlanchasUSD = useMemo(() => getSubtotal(planchas, 'USD'), [planchas, exchangeRate]);
-    const totalMatPEN = useMemo(() => getSubtotal(materiales, 'PEN'), [materiales, exchangeRate]);
+
+    // Original Material Cost
+    const rawTotalMatPEN = useMemo(() => getSubtotal(materiales, 'PEN'), [materiales, exchangeRate]);
+    // Material Cost with Cushion
+    const totalMatPEN = useMemo(() => rawTotalMatPEN * (1 + materialCushion), [rawTotalMatPEN, materialCushion]);
+
     const totalLaborPEN = useMemo(() => getSubtotal(labor, 'PEN'), [labor, exchangeRate]);
 
     // Extra data is special as it's truly mixed by nature in its original view
@@ -215,6 +223,22 @@ export default function CostStructurePage() {
 
                 <div className="flex items-center gap-8">
                     <div className="flex flex-col items-end">
+                        <span className="text-[9px] uppercase font-black text-[#FF7043] tracking-widest">Colchón (Margen)</span>
+                        <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold text-gray-400">%</span>
+                            <input
+                                type="number"
+                                step="0.01"
+                                value={materialCushion}
+                                onChange={(e) => setMaterialCushion(parseFloat(e.target.value))}
+                                className="w-16 bg-transparent border-none text-right font-black text-xl focus:outline-none text-[#FF7043]"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="h-10 w-px bg-gray-300/50" />
+
+                    <div className="flex flex-col items-end">
                         <span className="text-[9px] uppercase font-black text-[#469F7A] tracking-widest">T.C. Referencial</span>
                         <div className="flex items-center gap-2">
                             <span className="text-[10px] font-bold text-gray-400">S/</span>
@@ -254,7 +278,7 @@ export default function CostStructurePage() {
                         { label: 'Fabricación Local', value: totalFabPEN, currency: 'S/', color: '#1A1D21' },
                         { label: 'Otros / Extras', value: displayCurrency === 'PEN' ? totalExtraPEN : totalExtraUSD, currency: displayCurrency === 'PEN' ? 'S/' : '$', color: '#12C2E9' },
                         { label: 'Planchas (P.O.)', value: totalPlanchasUSD, currency: '$', color: '#469F7A' },
-                        { label: 'Insumos Alambre', value: totalMatPEN, currency: 'S/', color: '#00C38B' },
+                        { label: 'Insumos (+ Colchón)', value: totalMatPEN, currency: 'S/', color: '#00C38B' },
                         { label: 'Mano de Obra', value: totalLaborPEN, currency: 'S/', color: '#FF7043' },
                     ].map((stat, i) => (
                         <motion.div
@@ -350,7 +374,7 @@ export default function CostStructurePage() {
                                 <h2 className="text-lg font-[800] uppercase tracking-tighter italic">Materia Prima Alambres</h2>
                             </div>
                             <div className="text-right">
-                                <span className="text-[9px] uppercase font-black text-gray-400 tracking-widest block">Subtotal</span>
+                                <span className="text-[9px] uppercase font-black text-gray-400 tracking-widest block">Subtotal (+ {(materialCushion * 100).toFixed(0)}%)</span>
                                 <span className="text-xl font-black text-[#00C38B]">S/ {totalMatPEN.toLocaleString()}</span>
                             </div>
                         </div>
