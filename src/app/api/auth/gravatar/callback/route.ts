@@ -7,6 +7,7 @@ const REDIRECT_URI = process.env.GRAVATAR_REDIRECT_URI;
 export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const code = searchParams.get('code');
+    const state = searchParams.get('state'); // Contiene el origin original (dominio custom o localhost)
 
     // Base URL for internal redirects
     let baseUrl: string;
@@ -23,8 +24,12 @@ export async function GET(req: NextRequest) {
         redirectUri = `${baseUrl}/api/auth/gravatar/callback`;
     }
 
+    // El origin real al que queremos volver (ej: mail.disestrumetal.online)
+    // Lo extraemos del state enviado en el authorize
+    const finalBaseUrl = state || baseUrl;
+
     if (!code) {
-        return NextResponse.redirect(new URL('/crm/mail?gravatar_status=error&error=no_code', baseUrl));
+        return NextResponse.redirect(new URL('/crm/mail?gravatar_status=error&error=no_code', finalBaseUrl));
     }
 
     try {
@@ -46,7 +51,7 @@ export async function GET(req: NextRequest) {
 
         if (data.access_token) {
             // Store token in a cookie that expires in 14 days
-            const res = NextResponse.redirect(new URL('/crm/mail?gravatar_status=success', baseUrl));
+            const res = NextResponse.redirect(new URL('/crm/mail?gravatar_status=success', finalBaseUrl));
             res.cookies.set('gravatar_token', data.access_token, {
                 path: '/',
                 maxAge: 60 * 60 * 24 * 14,
@@ -55,10 +60,10 @@ export async function GET(req: NextRequest) {
             });
             return res;
         } else {
-            return NextResponse.redirect(new URL(`/crm/mail?gravatar_status=error&error=${data.error}`, baseUrl));
+            return NextResponse.redirect(new URL(`/crm/mail?gravatar_status=error&error=${data.error}`, finalBaseUrl));
         }
     } catch (error) {
         console.error('Gravatar Callback Error:', error);
-        return NextResponse.redirect(new URL('/crm/mail?gravatar_status=error', baseUrl));
+        return NextResponse.redirect(new URL('/crm/mail?gravatar_status=error', finalBaseUrl));
     }
 }

@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
         return NextResponse.redirect(new URL('/crm/mail?gravatar_status=error&error=not_configured', baseUrl));
     }
 
-    const authUrl = `https://public-api.wordpress.com/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=auth+gravatar-profile:read+gravatar-profile:manage`;
+    const authUrl = `https://public-api.wordpress.com/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=auth+gravatar-profile:read+gravatar-profile:manage&state=${encodeURIComponent(baseUrl)}`;
 
     const redirectResponse = NextResponse.redirect(authUrl);
     return redirectResponse;
