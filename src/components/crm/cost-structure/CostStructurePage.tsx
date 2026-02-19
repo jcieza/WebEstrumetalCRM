@@ -94,6 +94,13 @@ export default function CostStructurePage() {
     const [exchangeRate, setExchangeRate] = useState(3.75);
     const [materialCushion, setMaterialCushion] = useState(0.20); // 20% safety margin
     const [displayCurrency, setDisplayCurrency] = useState<'PEN' | 'USD'>('PEN');
+    const [sectionSettings, setSectionSettings] = useState<Record<string, { currency: 'PEN' | 'USD', hasIGV: boolean }>>({
+        fabricacion: { currency: 'PEN', hasIGV: true },
+        extras: { currency: 'PEN', hasIGV: true },
+        planchas: { currency: 'USD', hasIGV: true },
+        materiales: { currency: 'PEN', hasIGV: true },
+        labor: { currency: 'PEN', hasIGV: true }
+    });
     const [isLoaded, setIsLoaded] = useState(false);
 
     // --- Persistence ---
@@ -110,6 +117,7 @@ export default function CostStructurePage() {
                 if (data.exchangeRate) setExchangeRate(data.exchangeRate);
                 if (data.materialCushion !== undefined) setMaterialCushion(data.materialCushion);
                 if (data.displayCurrency) setDisplayCurrency(data.displayCurrency);
+                if (data.sectionSettings) setSectionSettings(data.sectionSettings);
             } catch (e) {
                 console.error("Error loading saved data", e);
             }
@@ -127,11 +135,12 @@ export default function CostStructurePage() {
                 extraData,
                 exchangeRate,
                 materialCushion,
-                displayCurrency
+                displayCurrency,
+                sectionSettings
             };
             localStorage.setItem('cost_structure_data_v3', JSON.stringify(data));
         }
-    }, [fabricacion, planchas, materiales, labor, extraData, exchangeRate, materialCushion, displayCurrency, isLoaded]);
+    }, [fabricacion, planchas, materiales, labor, extraData, exchangeRate, materialCushion, displayCurrency, sectionSettings, isLoaded]);
 
     // --- Calculations ---
     const getSubtotal = (items: CostItem[], targetCurrency: 'PEN' | 'USD') => {
@@ -164,6 +173,35 @@ export default function CostStructurePage() {
     const totalUSD = useMemo(() => totalPEN / exchangeRate, [totalPEN, exchangeRate]);
 
     const mainTotal = displayCurrency === 'PEN' ? totalPEN : totalUSD;
+
+    const getFinalSubtotal = (baseSubtotal: number, sectionKey: string) => {
+        const settings = sectionSettings[sectionKey];
+        const subtotalWithIGV = settings.hasIGV ? baseSubtotal : baseSubtotal * 1.18;
+
+        // Convert to section's display currency
+        if (settings.currency === 'PEN') return subtotalWithIGV;
+        return subtotalWithIGV / exchangeRate;
+    };
+
+    const sectionTotals = useMemo(() => ({
+        fabricacion: getFinalSubtotal(totalFabPEN, 'fabricacion'),
+        extras: getFinalSubtotal(totalExtraPEN, 'extras'),
+        planchas: getFinalSubtotal(totalPlanchasUSD * exchangeRate, 'planchas'),
+        materiales: getFinalSubtotal(totalMatPEN, 'materiales'),
+        labor: getFinalSubtotal(totalLaborPEN, 'labor')
+    }), [totalFabPEN, totalExtraPEN, totalPlanchasUSD, totalMatPEN, totalLaborPEN, sectionSettings, exchangeRate]);
+
+    const finalTotalPEN = useMemo(() => {
+        const sum = (base: number, key: string) => sectionSettings[key].hasIGV ? base : base * 1.18;
+        return sum(totalFabPEN, 'fabricacion') +
+            sum(totalExtraPEN, 'extras') +
+            sum(totalPlanchasUSD * exchangeRate, 'planchas') +
+            sum(totalMatPEN, 'materiales') +
+            sum(totalLaborPEN, 'labor');
+    }, [totalFabPEN, totalExtraPEN, totalPlanchasUSD, totalMatPEN, totalLaborPEN, sectionSettings, exchangeRate]);
+
+    const finalTotalUSD = useMemo(() => finalTotalPEN / exchangeRate, [finalTotalPEN, exchangeRate]);
+    const displayFinalTotal = displayCurrency === 'PEN' ? finalTotalPEN : finalTotalUSD;
 
     // --- Handlers ---
     const updateItem = (setter: any, id: string, field: string, value: any) => {
@@ -198,6 +236,20 @@ export default function CostStructurePage() {
 
     const toggleCurrency = () => {
         setDisplayCurrency(prev => prev === 'PEN' ? 'USD' : 'PEN');
+    };
+
+    const toggleSectionIGV = (key: string) => {
+        setSectionSettings(prev => ({
+            ...prev,
+            [key]: { ...prev[key], hasIGV: !prev[key].hasIGV }
+        }));
+    };
+
+    const toggleSectionCurrency = (key: string) => {
+        setSectionSettings(prev => ({
+            ...prev,
+            [key]: { ...prev[key], currency: prev[key].currency === 'PEN' ? 'USD' : 'PEN' }
+        }));
     };
 
     return (
@@ -261,7 +313,7 @@ export default function CostStructurePage() {
                                 Total {displayCurrency} <span className="text-[8px]">(Click para toggle)</span>
                             </span>
                             <span className="text-2xl font-[800] tracking-tighter flex items-center gap-2">
-                                {displayCurrency === 'PEN' ? 'S/' : '$'} {mainTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                {displayCurrency === 'PEN' ? 'S/' : '$'} {displayFinalTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                 <RefreshCw size={14} className="text-[#469F7A] opacity-40 group-hover:rotate-180 transition-transform duration-500" />
                             </span>
                         </div>
@@ -275,23 +327,29 @@ export default function CostStructurePage() {
                 {/* Summary Cards */}
                 <div className="grid grid-cols-5 gap-6">
                     {[
-                        { label: 'Fabricación Local', value: totalFabPEN, currency: 'S/', color: '#1A1D21' },
-                        { label: 'Otros / Extras', value: displayCurrency === 'PEN' ? totalExtraPEN : totalExtraUSD, currency: displayCurrency === 'PEN' ? 'S/' : '$', color: '#12C2E9' },
-                        { label: 'Planchas (P.O.)', value: totalPlanchasUSD, currency: '$', color: '#469F7A' },
-                        { label: 'Insumos (+ Colchón)', value: totalMatPEN, currency: 'S/', color: '#00C38B' },
-                        { label: 'Mano de Obra', value: totalLaborPEN, currency: 'S/', color: '#FF7043' },
+                        { label: 'Fabricación Local', value: sectionSettings.fabricacion.currency === 'PEN' ? totalFabPEN : totalFabPEN / exchangeRate, currency: sectionSettings.fabricacion.currency === 'PEN' ? 'S/' : '$', color: '#1A1D21', key: 'fabricacion' },
+                        { label: 'Otros / Extras', value: sectionSettings.extras.currency === 'PEN' ? totalExtraPEN : totalExtraPEN / exchangeRate, currency: sectionSettings.extras.currency === 'PEN' ? 'S/' : '$', color: '#12C2E9', key: 'extras' },
+                        { label: 'Planchas (P.O.)', value: sectionSettings.planchas.currency === 'USD' ? totalPlanchasUSD : totalPlanchasUSD * exchangeRate, currency: sectionSettings.planchas.currency === 'USD' ? '$' : 'S/', color: '#469F7A', key: 'planchas' },
+                        { label: 'Insumos (+ Colchón)', value: sectionSettings.materiales.currency === 'PEN' ? totalMatPEN : totalMatPEN / exchangeRate, currency: sectionSettings.materiales.currency === 'PEN' ? 'S/' : '$', color: '#00C38B', key: 'materiales' },
+                        { label: 'Mano de Obra', value: sectionSettings.labor.currency === 'PEN' ? totalLaborPEN : totalLaborPEN / exchangeRate, currency: sectionSettings.labor.currency === 'PEN' ? 'S/' : '$', color: '#FF7043', key: 'labor' },
                     ].map((stat, i) => (
                         <motion.div
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: i * 0.1 }}
                             key={i}
-                            className="bg-white/45 backdrop-blur-[25px] border border-white/80 p-6 rounded-[28px] shadow-[0_20px_40px_rgba(0,0,0,0.08)] relative overflow-hidden group"
+                            className={`bg-white/45 backdrop-blur-[25px] border border-white/80 p-6 rounded-[28px] shadow-[0_20px_40px_rgba(0,0,0,0.08)] relative overflow-hidden group cursor-pointer ${!sectionSettings[stat.key].hasIGV ? 'ring-2 ring-rose-500/20' : ''}`}
+                            onDoubleClick={() => toggleSectionIGV(stat.key)}
                         >
                             <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:scale-110 transition-all">
                                 <Coins size={60} color={stat.color} />
                             </div>
-                            <span className="text-[10px] uppercase font-black tracking-widest text-gray-400 mb-2 block">{stat.label}</span>
+                            <div className="flex justify-between items-start mb-2">
+                                <span className="text-[10px] uppercase font-black tracking-widest text-gray-400">{stat.label}</span>
+                                {!sectionSettings[stat.key].hasIGV && (
+                                    <span className="text-[8px] font-black text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-100">+18% IGV</span>
+                                )}
+                            </div>
                             <div className="flex items-baseline gap-1">
                                 <span className="text-xs font-bold" style={{ color: stat.color }}>{stat.currency}</span>
                                 <span className="text-2xl font-[800] tracking-tight">{stat.value.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
@@ -307,9 +365,25 @@ export default function CostStructurePage() {
                             <Package className="text-[#1A1D21]" size={24} />
                             <h2 className="text-lg font-[800] uppercase tracking-tighter italic">Fabricación Alambre</h2>
                         </div>
-                        <div className="text-right">
-                            <span className="text-[9px] uppercase font-black text-gray-400 tracking-widest block">Subtotal</span>
-                            <span className="text-xl font-black text-[#1A1D21]">S/ {totalFabPEN.toLocaleString()}</span>
+                        <div className="text-right flex items-center gap-4">
+                            <button
+                                onDoubleClick={() => toggleSectionIGV('fabricacion')}
+                                className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${sectionSettings.fabricacion.hasIGV ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700 animate-pulse'}`}
+                            >
+                                {sectionSettings.fabricacion.hasIGV ? '+ IGV' : 'No IGV'}
+                            </button>
+                            <div>
+                                <span className="text-[9px] uppercase font-black text-gray-400 tracking-widest block">Subtotal</span>
+                                <span className="text-xl font-black text-[#1A1D21] tabular-nums">
+                                    <span
+                                        className="cursor-pointer hover:text-[#469F7A] transition-colors mr-1"
+                                        onDoubleClick={() => toggleSectionCurrency('fabricacion')}
+                                    >
+                                        {sectionSettings.fabricacion.currency === 'PEN' ? 'S/' : '$'}
+                                    </span>
+                                    {sectionTotals.fabricacion.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </span>
+                            </div>
                         </div>
                     </div>
                     <GlassTable
@@ -326,9 +400,25 @@ export default function CostStructurePage() {
                             <Calculator className="text-[#12C2E9]" size={24} />
                             <h2 className="text-lg font-[800] uppercase tracking-tighter italic">Complementos y Gastos Extra</h2>
                         </div>
-                        <div className="text-right">
-                            <span className="text-[9px] uppercase font-black text-gray-400 tracking-widest block">Subtotal (PEN)</span>
-                            <span className="text-xl font-black text-[#12C2E9]">S/ {totalExtraPEN.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                        <div className="text-right flex items-center gap-4">
+                            <button
+                                onDoubleClick={() => toggleSectionIGV('extras')}
+                                className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${sectionSettings.extras.hasIGV ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700 animate-pulse'}`}
+                            >
+                                {sectionSettings.extras.hasIGV ? '+ IGV' : 'No IGV'}
+                            </button>
+                            <div>
+                                <span className="text-[9px] uppercase font-black text-gray-400 tracking-widest block">Subtotal</span>
+                                <span className="text-xl font-black text-[#12C2E9] tabular-nums">
+                                    <span
+                                        className="cursor-pointer hover:text-[#469F7A] transition-colors mr-1"
+                                        onDoubleClick={() => toggleSectionCurrency('extras')}
+                                    >
+                                        {sectionSettings.extras.currency === 'PEN' ? 'S/' : '$'}
+                                    </span>
+                                    {sectionTotals.extras.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </span>
+                            </div>
                         </div>
                     </div>
                     <GlassTable
@@ -351,9 +441,25 @@ export default function CostStructurePage() {
                                 <Info size={14} className="text-[#469F7A]" />
                                 <span className="text-[10px] font-bold uppercase tracking-widest text-[#469F7A]">No requiere cambios frecuentes</span>
                             </div>
-                            <div className="text-right">
-                                <span className="text-[9px] uppercase font-black text-gray-400 tracking-widest block">Subtotal</span>
-                                <span className="text-xl font-black text-[#469F7A]">$ {totalPlanchasUSD.toLocaleString()}</span>
+                            <div className="text-right flex items-center gap-4">
+                                <button
+                                    onDoubleClick={() => toggleSectionIGV('planchas')}
+                                    className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${sectionSettings.planchas.hasIGV ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700 animate-pulse'}`}
+                                >
+                                    {sectionSettings.planchas.hasIGV ? '+ IGV' : 'No IGV'}
+                                </button>
+                                <div>
+                                    <span className="text-[9px] uppercase font-black text-gray-400 tracking-widest block">Subtotal</span>
+                                    <span className="text-xl font-black text-[#469F7A] tabular-nums">
+                                        <span
+                                            className="cursor-pointer hover:text-[#00C38B] transition-colors mr-1"
+                                            onDoubleClick={() => toggleSectionCurrency('planchas')}
+                                        >
+                                            {sectionSettings.planchas.currency === 'PEN' ? 'S/' : '$'}
+                                        </span>
+                                        {sectionTotals.planchas.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -373,9 +479,25 @@ export default function CostStructurePage() {
                                 <TrendingUp className="text-[#00C38B]" size={24} />
                                 <h2 className="text-lg font-[800] uppercase tracking-tighter italic">Materia Prima Alambres</h2>
                             </div>
-                            <div className="text-right">
-                                <span className="text-[9px] uppercase font-black text-gray-400 tracking-widest block">Subtotal (+ {(materialCushion * 100).toFixed(0)}%)</span>
-                                <span className="text-xl font-black text-[#00C38B]">S/ {totalMatPEN.toLocaleString()}</span>
+                            <div className="text-right flex items-center gap-4">
+                                <button
+                                    onDoubleClick={() => toggleSectionIGV('materiales')}
+                                    className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${sectionSettings.materiales.hasIGV ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700 animate-pulse'}`}
+                                >
+                                    {sectionSettings.materiales.hasIGV ? '+ IGV' : 'No IGV'}
+                                </button>
+                                <div>
+                                    <span className="text-[9px] uppercase font-black text-gray-400 tracking-widest block">Subtotal (+ {(materialCushion * 100).toFixed(0)}%)</span>
+                                    <span className="text-xl font-black text-[#00C38B] tabular-nums">
+                                        <span
+                                            className="cursor-pointer hover:text-[#469F7A] transition-colors mr-1"
+                                            onDoubleClick={() => toggleSectionCurrency('materiales')}
+                                        >
+                                            {sectionSettings.materiales.currency === 'PEN' ? 'S/' : '$'}
+                                        </span>
+                                        {sectionTotals.materiales.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                    </span>
+                                </div>
                             </div>
                         </div>
                         <GlassTable
@@ -392,9 +514,25 @@ export default function CostStructurePage() {
                                 <UsersIcon className="text-[#FF7043]" size={24} />
                                 <h2 className="text-lg font-[800] uppercase tracking-tighter italic">Mano de Obra Estrumetal</h2>
                             </div>
-                            <div className="text-right">
-                                <span className="text-[9px] uppercase font-black text-gray-400 tracking-widest block">Subtotal</span>
-                                <span className="text-xl font-black text-[#FF7043]">S/ {totalLaborPEN.toLocaleString()}</span>
+                            <div className="text-right flex items-center gap-4">
+                                <button
+                                    onDoubleClick={() => toggleSectionIGV('labor')}
+                                    className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${sectionSettings.labor.hasIGV ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700 animate-pulse'}`}
+                                >
+                                    {sectionSettings.labor.hasIGV ? '+ IGV' : 'No IGV'}
+                                </button>
+                                <div>
+                                    <span className="text-[9px] uppercase font-black text-gray-400 tracking-widest block">Subtotal</span>
+                                    <span className="text-xl font-black text-[#FF7043] tabular-nums">
+                                        <span
+                                            className="cursor-pointer hover:text-[#469F7A] transition-colors mr-1"
+                                            onDoubleClick={() => toggleSectionCurrency('labor')}
+                                        >
+                                            {sectionSettings.labor.currency === 'PEN' ? 'S/' : '$'}
+                                        </span>
+                                        {sectionTotals.labor.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                    </span>
+                                </div>
                             </div>
                         </div>
                         <GlassTable
@@ -436,7 +574,7 @@ export default function CostStructurePage() {
                             </button>
                             <div className="text-6xl font-[900] tracking-tighter items-baseline gap-2">
                                 <span className="text-2xl font-bold mr-2 text-white/50">{displayCurrency === 'PEN' ? 'S/' : '$'}</span>
-                                {mainTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                {displayFinalTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                             </div>
                         </div>
                         <button className="bg-white text-[#1A1D21] px-12 py-5 rounded-[24px] font-black uppercase tracking-tighter text-sm hover:scale-105 transition-all shadow-white/20 shadow-2xl flex items-center gap-4 ml-auto">
