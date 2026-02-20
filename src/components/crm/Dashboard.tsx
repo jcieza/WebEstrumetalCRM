@@ -1,103 +1,138 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Search, TrendingUp, AlertTriangle, DollarSign, Clock } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import {
+    Mail, Factory, Package, Users, AlertTriangle, Clock,
+    ArrowRight, Inbox, ChevronRight, BarChart3, Globe,
+    MessageSquare, Settings as SettingsIcon
+} from 'lucide-react';
 import { db } from '@/lib/firebase';
-import { collection, query, getDocs, limit } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, limit, getCountFromServer } from 'firebase/firestore';
 
 interface DashboardProps {
     onNavigate: (tab: string, clientId?: string) => void;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
-    const [clients, setClients] = useState<any[]>([]);
-    const [searchTerm, setSearchTerm] = useState('');
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState({
-        closingProb: '0%',
-        pipeline: 'S/ 0',
+        unreadEmails: 0,
+        urgentOps: 0,
         lowStock: 0,
-        urgentOps: 0
+        totalClients: 0,
     });
+    const [recentEmails, setRecentEmails] = useState<any[]>([]);
+    const [recentOps, setRecentOps] = useState<any[]>([]);
 
     useEffect(() => {
-        fetchClients();
-        fetchStats();
+        fetchAllData();
     }, []);
 
-    const fetchStats = async () => {
-        try {
-            // Fetch production orders for urgent count
-            const resProd = await fetch('/api/production');
-            const orders = await resProd.json();
-            const urgent = Array.isArray(orders) ? orders.filter((o: any) => o.priority === 'ALTA' && o.status !== 'ENTREGADO').length : 0;
-
-            // Fetch quotations for pipeline
-            const resQuot = await fetch('/api/quotations');
-            const quots = await resQuot.json();
-            const quotsArray = Array.isArray(quots) ? quots : [];
-            const totalPipeline = quotsArray
-                .filter((q: any) => q.status === 'PENDIENTE' || q.status === 'EN SEGUIMIENTO')
-                .reduce((acc: number, q: any) => acc + (q.totalAmount || 0), 0);
-
-            // Average probability (demo logic or derived)
-            const prob = quotsArray.length > 0 ? '75%' : '0%';
-
-            // Fetch inventory for low stock
-            const resInv = await fetch('/api/inventory');
-            const items = await resInv.json();
-            const low = Array.isArray(items) ? items.filter((i: any) => i.stock < (i.min_stock || 10)).length : 0;
-
-            setStats({
-                closingProb: prob,
-                pipeline: `S/ ${(totalPipeline / 1000).toFixed(0)}k`,
-                lowStock: low,
-                urgentOps: urgent
-            });
-        } catch (error) {
-            console.error("Error fetching dashboard stats:", error);
-        }
-    };
-
-    const fetchClients = async (search = '') => {
+    const fetchAllData = async () => {
         setLoading(true);
         try {
-            const res = await fetch('/api/clients');
-            const clientsData = await res.json();
-            if (Array.isArray(clientsData)) {
-                setClients(clientsData.slice(0, 10)); // Top 10 for dashboard
-            } else {
-                setClients([]);
-            }
-        } catch (error) {
-            console.error("Error fetching clients:", error);
-            setClients([]);
+            await Promise.all([
+                fetchStats(),
+                fetchRecentEmails(),
+                fetchRecentOps(),
+            ]);
+        } catch (e) {
+            console.error('Dashboard error:', e);
         } finally {
             setLoading(false);
         }
     };
 
-    const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setSearchTerm(e.target.value);
-        // Implement debounced search here
+    const fetchStats = async () => {
+        try {
+            // Correos sin leer
+            const emailsQ = query(
+                collection(db, 'incoming_messages'),
+                where('status', '==', 'NEW')
+            );
+            const emailSnap = await getCountFromServer(emailsQ);
+            const unread = emailSnap.data().count;
+
+            // OPs urgentes
+            let urgent = 0;
+            try {
+                const resProd = await fetch('/api/production');
+                const orders = await resProd.json();
+                urgent = Array.isArray(orders)
+                    ? orders.filter((o: any) => o.priority === 'ALTA' && o.status !== 'ENTREGADO').length
+                    : 0;
+            } catch { /* API might not exist yet */ }
+
+            // Stock bajo mínimo
+            let low = 0;
+            try {
+                const resInv = await fetch('/api/inventory');
+                const items = await resInv.json();
+                low = Array.isArray(items)
+                    ? items.filter((i: any) => i.stock < (i.min_stock || 10)).length
+                    : 0;
+            } catch { /* API might not exist yet */ }
+
+            // Total clientes
+            const clientsSnap = await getCountFromServer(collection(db, 'clients'));
+            const totalClients = clientsSnap.data().count;
+
+            setStats({ unreadEmails: unread, urgentOps: urgent, lowStock: low, totalClients });
+        } catch (e) {
+            console.error('Stats error:', e);
+        }
     };
 
-    const KPICard = ({ title, value, icon: Icon, color }: any) => (
-        <div className="bg-white p-6 flex flex-col gap-2 transition-all border border-gray-100 rounded-lg shadow-sm">
-            <div className="flex justify-between items-center">
-                <span className="text-gray-500 text-xs font-bold uppercase tracking-wider">{title}</span>
-                <div className="p-2 rounded-md" style={{ backgroundColor: `${color}10`, color: color }}>
-                    <Icon size={18} />
-                </div>
-            </div>
-            <div className="text-2xl font-black text-gray-800 tracking-tight">{value}</div>
-            <div className="text-[10px] text-gray-400 font-medium">ESTADÍSTICA DE PLANTA</div>
-        </div>
-    );
+    const fetchRecentEmails = async () => {
+        try {
+            const q = query(
+                collection(db, 'incoming_messages'),
+                orderBy('receivedAt', 'desc'),
+                limit(5)
+            );
+            const snap = await getDocs(q);
+            setRecentEmails(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        } catch (e) {
+            console.error('Recent emails error:', e);
+        }
+    };
+
+    const fetchRecentOps = async () => {
+        try {
+            const res = await fetch('/api/production');
+            const orders = await res.json();
+            if (Array.isArray(orders)) {
+                setRecentOps(orders.slice(0, 3));
+            }
+        } catch { /* Production API might fail */ }
+    };
+
+    const quickLinks = [
+        { id: 'emails', label: 'Centro de Correos', icon: Mail, color: '#10B981', desc: 'Bandeja de entrada' },
+        { id: 'production', label: 'Producción (OP)', icon: Factory, color: '#6366F1', desc: 'Tablero de órdenes' },
+        { id: 'inventory', label: 'Inventario', icon: Package, color: '#F97316', desc: 'Control de stock' },
+        { id: 'clients', label: 'Clientes 360', icon: Users, color: '#8B5CF6', desc: 'Base de contactos' },
+        { id: 'market-intelligence', label: 'Intel. Comercial', icon: Globe, color: '#0EA5E9', desc: 'Investigación de mercado' },
+        { id: 'cost-structure', label: 'Estructura Costos', icon: BarChart3, color: '#1A1D21', desc: 'Análisis de costos' },
+        { id: 'messages', label: 'WhatsApp CRM', icon: MessageSquare, color: '#22C55E', desc: 'Mensajería directa' },
+        { id: 'settings', label: 'Configuración', icon: SettingsIcon, color: '#64748B', desc: 'Ajustes del sistema' },
+    ];
+
+    const formatTime = (dateStr: string) => {
+        if (!dateStr) return '';
+        const d = new Date(dateStr);
+        const now = new Date();
+        const diffMs = now.getTime() - d.getTime();
+        const diffMin = Math.floor(diffMs / 60000);
+        if (diffMin < 60) return `hace ${diffMin}m`;
+        const diffH = Math.floor(diffMin / 60);
+        if (diffH < 24) return `hace ${diffH}h`;
+        const diffD = Math.floor(diffH / 24);
+        return `hace ${diffD}d`;
+    };
 
     return (
-        <div className="flex flex-col gap-8">
+        <div className="flex flex-col gap-8 max-w-7xl mx-auto">
             {/* Header */}
             <div className="border-b border-gray-200 pb-4">
                 <h1 className="text-3xl font-black tracking-tight text-gray-800 uppercase">Dashboard Central</h1>
@@ -105,92 +140,152 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
             </div>
 
             {/* KPIs */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <KPICard title="Prob. Cierre" value={stats.closingProb} icon={TrendingUp} color="#10b981" />
-                <KPICard title="Pipeline" value={stats.pipeline} icon={DollarSign} color="#3b82f6" />
-                <KPICard title="Alertas Stock" value={stats.lowStock} icon={AlertTriangle} color="#f97316" />
-                <KPICard title="Urgencias OPs" value={stats.urgentOps} icon={Clock} color="#6366f1" />
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <button onClick={() => onNavigate('emails')} className="bg-white p-5 flex flex-col gap-2 border border-gray-100 rounded-xl shadow-sm hover:shadow-md hover:border-emerald-200 transition-all text-left group">
+                    <div className="flex justify-between items-center">
+                        <span className="text-gray-400 text-[10px] font-black uppercase tracking-widest">Correos sin leer</span>
+                        <div className="p-2 rounded-lg bg-emerald-50 text-emerald-600 group-hover:bg-emerald-100 transition-colors">
+                            <Inbox size={18} />
+                        </div>
+                    </div>
+                    <div className="text-3xl font-black text-gray-800 tracking-tight">{loading ? '...' : stats.unreadEmails}</div>
+                    <div className="text-[10px] text-gray-400 font-medium flex items-center gap-1">Bandeja de entrada <ArrowRight size={10} /></div>
+                </button>
+
+                <button onClick={() => onNavigate('production')} className="bg-white p-5 flex flex-col gap-2 border border-gray-100 rounded-xl shadow-sm hover:shadow-md hover:border-indigo-200 transition-all text-left group">
+                    <div className="flex justify-between items-center">
+                        <span className="text-gray-400 text-[10px] font-black uppercase tracking-widest">OPs urgentes</span>
+                        <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600 group-hover:bg-indigo-100 transition-colors">
+                            <Clock size={18} />
+                        </div>
+                    </div>
+                    <div className="text-3xl font-black text-gray-800 tracking-tight">{loading ? '...' : stats.urgentOps}</div>
+                    <div className="text-[10px] text-gray-400 font-medium flex items-center gap-1">Prioridad alta <ArrowRight size={10} /></div>
+                </button>
+
+                <button onClick={() => onNavigate('inventory')} className="bg-white p-5 flex flex-col gap-2 border border-gray-100 rounded-xl shadow-sm hover:shadow-md hover:border-orange-200 transition-all text-left group">
+                    <div className="flex justify-between items-center">
+                        <span className="text-gray-400 text-[10px] font-black uppercase tracking-widest">Alertas stock</span>
+                        <div className="p-2 rounded-lg bg-orange-50 text-orange-600 group-hover:bg-orange-100 transition-colors">
+                            <AlertTriangle size={18} />
+                        </div>
+                    </div>
+                    <div className="text-3xl font-black text-gray-800 tracking-tight">{loading ? '...' : stats.lowStock}</div>
+                    <div className="text-[10px] text-gray-400 font-medium flex items-center gap-1">Bajo mínimo <ArrowRight size={10} /></div>
+                </button>
+
+                <button onClick={() => onNavigate('clients')} className="bg-white p-5 flex flex-col gap-2 border border-gray-100 rounded-xl shadow-sm hover:shadow-md hover:border-violet-200 transition-all text-left group">
+                    <div className="flex justify-between items-center">
+                        <span className="text-gray-400 text-[10px] font-black uppercase tracking-widest">Total clientes</span>
+                        <div className="p-2 rounded-lg bg-violet-50 text-violet-600 group-hover:bg-violet-100 transition-colors">
+                            <Users size={18} />
+                        </div>
+                    </div>
+                    <div className="text-3xl font-black text-gray-800 tracking-tight">{loading ? '...' : stats.totalClients}</div>
+                    <div className="text-[10px] text-gray-400 font-medium flex items-center gap-1">Base de datos <ArrowRight size={10} /></div>
+                </button>
             </div>
 
             {/* Main Content */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Client Search */}
-                <div className="lg:col-span-2 bg-white border border-gray-100 rounded-lg p-6 shadow-sm">
-                    <div className="flex justify-between items-center mb-6 border-b border-gray-50 pb-4">
-                        <h3 className="text-sm font-black uppercase tracking-wider text-gray-700">Administración de Clientes</h3>
-                        <button onClick={() => onNavigate('clients')} className="text-[10px] bg-gray-100 px-3 py-1 rounded-full text-gray-600 font-bold hover:bg-gray-200 transition-colors uppercase tracking-tighter">Explorar Base Completa</button>
+                {/* Actividad Reciente */}
+                <div className="lg:col-span-2 flex flex-col gap-6">
+                    {/* Ultimos Correos */}
+                    <div className="bg-white border border-gray-100 rounded-xl p-6 shadow-sm">
+                        <div className="flex justify-between items-center mb-5 border-b border-gray-50 pb-4">
+                            <h3 className="text-sm font-black uppercase tracking-wider text-gray-700 flex items-center gap-2">
+                                <Mail size={16} className="text-emerald-600" /> Últimos correos
+                            </h3>
+                            <button onClick={() => onNavigate('emails')} className="text-[10px] bg-gray-100 px-3 py-1 rounded-full text-gray-600 font-bold hover:bg-gray-200 transition-colors uppercase tracking-tighter">
+                                Ver todos
+                            </button>
+                        </div>
+                        <div className="divide-y divide-gray-50">
+                            {loading ? (
+                                <p className="py-8 text-center text-[10px] font-bold text-gray-300 uppercase italic">Cargando actividad...</p>
+                            ) : recentEmails.length === 0 ? (
+                                <p className="py-8 text-center text-[10px] font-bold text-gray-300 uppercase italic">No hay correos recientes</p>
+                            ) : recentEmails.map(email => (
+                                <div key={email.id} className="py-3 flex items-center gap-3 group">
+                                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${email.status === 'NEW' ? 'bg-emerald-500' : 'bg-gray-200'}`} />
+                                    <div className="flex-1 min-w-0">
+                                        <p className={`text-xs truncate ${email.status === 'NEW' ? 'font-bold text-gray-800' : 'font-medium text-gray-500'}`}>
+                                            {email.subject || '(Sin asunto)'}
+                                        </p>
+                                        <p className="text-[10px] text-gray-400 truncate">
+                                            {email.from?.split('<')[0]?.trim() || email.from}
+                                        </p>
+                                    </div>
+                                    <span className="text-[10px] text-gray-400 font-medium flex-shrink-0">{formatTime(email.receivedAt)}</span>
+                                </div>
+                            ))}
+                        </div>
                     </div>
 
-                    <div className="relative mb-6">
-                        <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                        <input
-                            type="text"
-                            placeholder="FILTRAR POR RAZÓN SOCIAL O RUC..."
-                            value={searchTerm}
-                            onChange={handleSearch}
-                            className="w-full pl-12 pr-4 py-3 rounded-md border border-gray-200 bg-gray-50/50 outline-none focus:ring-2 focus:ring-green-500/10 transition-all text-xs font-bold tracking-tight"
-                        />
-                    </div>
-
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr className="text-gray-400 text-[9px] uppercase tracking-widest border-b border-gray-100">
-                                    <th className="pb-3 font-bold">Razón Social</th>
-                                    <th className="pb-3 font-bold">Identificación (RUC)</th>
-                                    <th className="pb-3 font-bold text-right">Análisis</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-50">
-                                {loading ? (
-                                    <tr><td colSpan={3} className="py-8 text-center text-[10px] font-bold text-gray-300 uppercase italic">Conectando con base de datos central...</td></tr>
-                                ) : clients.map(client => (
-                                    <tr key={client.id} className="group hover:bg-gray-50 transition-colors">
-                                        <td className="py-4 font-bold text-xs text-gray-700">{client.name}</td>
-                                        <td className="py-4 text-xs text-gray-500 font-mono tracking-tighter">{client.ruc || 'S/I'}</td>
-                                        <td className="py-4 text-right">
-                                            <button
-                                                onClick={() => onNavigate('clients', client.id)}
-                                                className="px-4 py-1.5 rounded-md bg-green-800 text-white text-[9px] font-black uppercase tracking-tighter hover:bg-green-900 transition-all shadow-sm"
-                                            >
-                                                Visión 360°
-                                            </button>
-                                        </td>
-                                    </tr>
+                    {/* Ultimas OPs */}
+                    {recentOps.length > 0 && (
+                        <div className="bg-white border border-gray-100 rounded-xl p-6 shadow-sm">
+                            <div className="flex justify-between items-center mb-5 border-b border-gray-50 pb-4">
+                                <h3 className="text-sm font-black uppercase tracking-wider text-gray-700 flex items-center gap-2">
+                                    <Factory size={16} className="text-indigo-600" /> Órdenes de Producción
+                                </h3>
+                                <button onClick={() => onNavigate('production')} className="text-[10px] bg-gray-100 px-3 py-1 rounded-full text-gray-600 font-bold hover:bg-gray-200 transition-colors uppercase tracking-tighter">
+                                    Ver tablero
+                                </button>
+                            </div>
+                            <div className="divide-y divide-gray-50">
+                                {recentOps.map((op: any) => (
+                                    <div key={op.id} className="py-3 flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${op.priority === 'ALTA' ? 'bg-red-500' : op.priority === 'MEDIA' ? 'bg-yellow-500' : 'bg-green-500'}`} />
+                                            <div>
+                                                <p className="text-xs font-bold text-gray-700">{op.product || op.id}</p>
+                                                <p className="text-[10px] text-gray-400">{op.client || 'Sin cliente'} -- {op.quantity || 0} uds</p>
+                                            </div>
+                                        </div>
+                                        <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-md ${op.status === 'ENTREGADO' ? 'bg-green-50 text-green-700' :
+                                                op.status === 'EN PRODUCCION' ? 'bg-blue-50 text-blue-700' :
+                                                    op.status === 'PENDIENTE' ? 'bg-yellow-50 text-yellow-700' :
+                                                        'bg-gray-50 text-gray-500'
+                                            }`}>{op.status}</span>
+                                    </div>
                                 ))}
-                            </tbody>
-                        </table>
-                    </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
-                {/* mini Chart */}
-                <div className="bg-white border border-gray-100 rounded-lg p-6 shadow-sm overflow-hidden">
-                    <h3 className="text-sm font-black uppercase tracking-wider text-gray-700 mb-6 border-b border-gray-50 pb-4">Proyección de Ingresos</h3>
-                    <div className="h-[300px] w-full relative" style={{ minWidth: '0', minHeight: '300px' }}>
-                        <ResponsiveContainer width="99%" height="100%">
-                            <BarChart data={[
-                                { name: 'Ene', v: 4000 },
-                                { name: 'Feb', v: 3000 },
-                                { name: 'Mar', v: 2000 },
-                                { name: 'Abr', v: 2780 },
-                                { name: 'May', v: 1890 },
-                                { name: 'Jun', v: 2390 },
-                            ]}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#9ca3af' }} />
-                                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#9ca3af' }} />
-                                <Tooltip
-                                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
-                                    cursor={{ fill: '#f9fafb' }}
-                                />
-                                <Bar dataKey="v" fill="var(--primary)" radius={[6, 6, 0, 0]} barSize={20} />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </div>
-                    <div className="mt-4 p-4 rounded-xl bg-blue-50/50 border border-blue-100">
-                        <p className="text-xs text-blue-800 leading-relaxed font-medium">
-                            💡 <span className="font-bold">Análisis IA:</span> Las ventas de Junio muestran un crecimiento consolidado del 15% respecto al promedio trimestral.
-                        </p>
+                {/* Accesos Rápidos */}
+                <div className="bg-white border border-gray-100 rounded-xl p-6 shadow-sm">
+                    <h3 className="text-sm font-black uppercase tracking-wider text-gray-700 mb-5 border-b border-gray-50 pb-4">Módulos</h3>
+                    <div className="flex flex-col gap-1.5">
+                        {quickLinks.map(link => {
+                            const Icon = link.icon;
+                            const badge = link.id === 'emails' ? stats.unreadEmails :
+                                link.id === 'production' ? stats.urgentOps :
+                                    link.id === 'inventory' ? stats.lowStock : 0;
+                            return (
+                                <button
+                                    key={link.id}
+                                    onClick={() => onNavigate(link.id)}
+                                    className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-all group text-left w-full"
+                                >
+                                    <div className="p-2 rounded-lg transition-colors" style={{ backgroundColor: `${link.color}10`, color: link.color }}>
+                                        <Icon size={18} />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-xs font-bold text-gray-700 group-hover:text-gray-900 transition-colors">{link.label}</p>
+                                        <p className="text-[10px] text-gray-400">{link.desc}</p>
+                                    </div>
+                                    {badge > 0 && (
+                                        <span className="text-[10px] font-black px-2 py-0.5 rounded-full" style={{ backgroundColor: `${link.color}15`, color: link.color }}>
+                                            {badge}
+                                        </span>
+                                    )}
+                                    <ChevronRight size={14} className="text-gray-300 group-hover:text-gray-500 transition-colors" />
+                                </button>
+                            );
+                        })}
                     </div>
                 </div>
             </div>
