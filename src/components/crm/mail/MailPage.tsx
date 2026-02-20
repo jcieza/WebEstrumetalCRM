@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Mail, Search, Clock, User, ArrowRight, ShieldCheck, Inbox, Archive, Trash2, Send, Paperclip, Download, Loader2, Eye, X, Settings as SettingsIcon, Smile, Type, ChevronRight, Image as ImageIcon, Menu, Star, Plus, Layout, MoreVertical, Share2, AlarmClock, CheckSquare, Tag, UploadCloud } from 'lucide-react';
+import { Mail, Search, Clock, User, ArrowRight, ShieldCheck, Inbox, Archive, Trash2, Send, Paperclip, Download, Loader2, Eye, X, Settings as SettingsIcon, Smile, Type, ChevronRight, Image as ImageIcon, Menu, Star, Plus, Layout, MoreVertical, Share2, AlarmClock, CheckSquare, Tag, UploadCloud, ExternalLink } from 'lucide-react';
 import { db, auth, storage } from '@/lib/firebase';
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, addDoc, limit, where, getDocs, getDoc } from 'firebase/firestore';
 import { algoliasearch } from 'algoliasearch';
@@ -54,7 +54,7 @@ const ESTRUMETAL_SIGNATURE = `
 // - [x] Update: Signature text to "Despacho de Oficina"
 // - [/] Comprehensive Overhaul: Fix structures (In Progress), HTML rendering, Multiple Recipients, Unread Counter, and Redesign Compose Modal.
 //     - [x] Phase 1: Logic Consolidation (Completed)
-import { getGravatarUrl, initGravatarHovercards, openGravatarQuickEditor, getGravatarQRUrl } from '@/utils/gravatar';
+import { getGravatarUrl, initGravatarHovercards, openGravatarQuickEditor, getGravatarQRUrl, getGravatarCardUrl } from '@/utils/gravatar';
 import GravatarHoverCard from './GravatarHoverCard';
 import GmailCompose from './GmailCompose';
 import { useSearchParams } from 'next/navigation';
@@ -1956,7 +1956,7 @@ const MailPage = () => {
                             <button onClick={() => setShowSubSettings(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-400 transition-all"><X size={20} /></button>
                         </div>
                         <div className="p-10 flex flex-col items-center gap-8">
-                            <div className="relative group">
+                            <div className="relative group flex flex-col items-center">
                                 <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-green-600/20 shadow-2xl group-hover:border-green-600 transition-all cursor-pointer">
                                     <img
                                         src={userProfile.photoURL || getGravatarUrl(userProfile.email) || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"}
@@ -1964,20 +1964,29 @@ const MailPage = () => {
                                         className="w-full h-full object-cover"
                                     />
                                 </div>
-                                <label className="absolute bottom-1 right-1 p-2.5 bg-green-600 text-white rounded-2xl shadow-xl cursor-pointer hover:bg-green-700 transition-all">
-                                    <ImageIcon size={18} />
-                                    <input type="file" className="hidden" onChange={async (e) => {
-                                        const file = e.target.files?.[0];
-                                        if (file) {
-                                            const storageRef = ref(storage, `profiles/${auth.currentUser?.uid}/${Date.now()}_${file.name}`);
-                                            await uploadBytes(storageRef, file);
-                                            const url = await getDownloadURL(storageRef);
-                                            await updateProfile?.(undefined, url);
-                                            setUserProfile(prev => ({ ...prev, photoURL: url }));
-                                            addToast('success', 'Imagen de perfil actualizada');
-                                        }
-                                    }} />
-                                </label>
+                                <div className="absolute -bottom-4 flex items-center justify-center gap-2">
+                                    <label className="p-2.5 bg-green-600 text-white rounded-2xl shadow-xl cursor-pointer hover:bg-green-700 transition-all" title="Actualizar foto internamente">
+                                        <ImageIcon size={18} />
+                                        <input type="file" className="hidden" onChange={async (e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file) {
+                                                const storageRef = ref(storage, `profiles/${auth.currentUser?.uid}/${Date.now()}_${file.name}`);
+                                                await uploadBytes(storageRef, file);
+                                                const url = await getDownloadURL(storageRef);
+                                                await updateProfile?.(undefined, url);
+                                                setUserProfile(prev => ({ ...prev, photoURL: url }));
+                                                addToast('success', 'Imagen de perfil actualizada');
+                                            }
+                                        }} />
+                                    </label>
+                                    <button
+                                        className="p-2.5 bg-blue-600 text-white rounded-2xl shadow-xl cursor-pointer hover:bg-blue-700 transition-all"
+                                        title="Actualizar foto en Gravatar externamente"
+                                        onClick={() => window.open('https://gravatar.com/profile/avatars', '_blank')}
+                                    >
+                                        <ExternalLink size={18} />
+                                    </button>
+                                </div>
                             </div>
                             <div className="w-full space-y-4">
                                 <div>
@@ -2080,8 +2089,8 @@ const MailPage = () => {
                     </div>
                 ))}
             </div>
-            {/* Hover Card for Gravatar */}
-            {(hoveredEmail || clickedEmail) && (
+            {/* Hover Card for Gravatar (Solo Hover) */}
+            {(hoveredEmail && !clickedEmail) && (
                 <div
                     className="fixed z-[9000]"
                     style={{
@@ -2089,9 +2098,34 @@ const MailPage = () => {
                         top: Math.min(hoverPosition.y, window.innerHeight - 400)
                     }}
                     onClick={(e) => e.stopPropagation()}
-                    onMouseLeave={() => { if (!clickedEmail) setHoveredEmail(null); }}
+                    onMouseLeave={() => setHoveredEmail(null)}
                 >
-                    <GravatarHoverCard email={(clickedEmail || hoveredEmail)!} theme={theme} />
+                    <GravatarHoverCard email={hoveredEmail} theme={theme} />
+                </div>
+            )}
+
+            {/* Official Gravatar Card Modal (Por Click) */}
+            {clickedEmail && (
+                <div
+                    className="fixed inset-0 z-[9500] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md"
+                    onClick={() => setClickedEmail(null)}
+                >
+                    <div
+                        className={`relative w-full max-w-sm rounded-[2rem] shadow-2xl overflow-hidden animate-in zoom-in duration-200 border ${theme === 'dark' ? 'bg-[#1A1C1E] border-white/10' : 'bg-white border-slate-100'}`}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <button
+                            onClick={() => setClickedEmail(null)}
+                            className="absolute top-4 right-4 z-[9600] p-2 bg-black/40 hover:bg-black/60 backdrop-blur-md text-white rounded-full transition-all"
+                        >
+                            <X size={20} />
+                        </button>
+                        <iframe
+                            src={getGravatarCardUrl(clickedEmail)}
+                            className="w-full h-[600px] border-none bg-transparent"
+                            title="Perfil Gravatar Oficial"
+                        />
+                    </div>
                 </div>
             )}
         </div>

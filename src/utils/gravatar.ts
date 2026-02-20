@@ -75,6 +75,16 @@ export const getGravatarUrl = (email: string, size: number = 150) => {
 };
 
 /**
+ * Get Official Gravatar Card URL
+ */
+export const getGravatarCardUrl = (email: string) => {
+    if (!email) return '';
+    const cleanEmail = email.trim().toLowerCase();
+    const hash = md5(cleanEmail);
+    return `https://gravatar.com/${hash}.card`;
+};
+
+/**
  * Get SHA256 Hash
  */
 export const getGravatarHash = async (email: string) => {
