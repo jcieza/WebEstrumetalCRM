@@ -1,11 +1,10 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useAuth } from '@/context/AuthContext';
 import {
     LayoutDashboard, Users, FileInput, MessageSquare, Settings,
-    Truck, Globe, FileText, Package, BarChart3,
-    Calendar, Scroll, Wallet, ShoppingCart, Zap, LogOut, Mail
+    Globe, Package, BarChart3, LogOut, Mail
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -17,50 +16,17 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, collapsed = false }) => {
     const { user, logout } = useAuth();
-    const [showGeminiChat, setShowGeminiChat] = useState(true);
-    const [showGems, setShowGems] = useState(true);
 
-    useEffect(() => {
-        const storedChat = localStorage.getItem('showGeminiChat');
-        setShowGeminiChat(storedChat !== 'false');
-
-        const storedGems = localStorage.getItem('showGems');
-        setShowGems(storedGems !== 'false');
-
-        const handleStorage = () => {
-            setShowGeminiChat(localStorage.getItem('showGeminiChat') !== 'false');
-            setShowGems(localStorage.getItem('showGems') !== 'false');
-        };
-        window.addEventListener('storage', handleStorage);
-        return () => window.removeEventListener('storage', handleStorage);
-    }, []);
-
-    const allMenuItems = [
+    const menuItems = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-        { id: 'gems', label: 'Cliente Finder (Gems)', icon: Zap, requiresSetting: 'showGems' },
+        { id: 'emails', label: 'Centro de Correos', icon: Mail },
         { id: 'market-intelligence', label: 'Intel. Comercial', icon: Globe },
         { id: 'production', label: 'Producción (OP)', icon: FileInput },
         { id: 'cost-structure', label: 'Estructura Costos', icon: BarChart3 },
         { id: 'clients', label: 'Clientes 360°', icon: Users },
-        { id: 'quotations', label: 'Cotizaciones', icon: FileText },
-        { id: 'guides', label: 'Guías Internas', icon: Scroll },
-        { id: 'cash-receipts', label: 'Caja Administrativa', icon: Wallet },
         { id: 'inventory', label: 'Inventario', icon: Package },
-        { id: 'calendar', label: 'Calendario', icon: Calendar },
-        { id: 'reports', label: 'Reportes', icon: BarChart3 },
-        { id: 'suppliers', label: 'Proveedores', icon: Truck },
-        { id: 'purchases', label: 'Compras', icon: ShoppingCart },
         { id: 'messages', label: 'WhatsApp CRM', icon: MessageSquare },
-        { id: 'emails', label: 'Centro de Correos', icon: Mail },
-        { id: 'ingestor', label: 'Ingestor IA', icon: FileInput },
-        { id: 'chat', label: 'Gemini Chat', icon: MessageSquare, requiresSetting: 'geminiChat' },
     ];
-
-    const menuItems = allMenuItems.filter(item => {
-        if (item.requiresSetting === 'geminiChat' && !showGeminiChat) return false;
-        if (item.requiresSetting === 'showGems' && !showGems) return false;
-        return true;
-    });
 
     return (
         <motion.div

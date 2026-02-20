@@ -4,8 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import {
     Home, Package, Settings as SettingsIcon, Users, Factory,
-    FileText, Truck, DollarSign, BarChart3, Calendar, ShoppingCart,
-    ChevronUp, ChevronDown, Mail
+    ChevronUp, ChevronDown, Mail, BarChart3
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -28,7 +27,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
     }, []);
 
     useEffect(() => {
-        // Handle localStorage on client side
         setIsTabletMode(localStorage.getItem('tabletMode') === 'true');
         setIsPhoneMode(localStorage.getItem('phoneMode') === 'true');
         setIsMenuHidden(localStorage.getItem('phoneMenuHidden') === 'true');
@@ -50,20 +48,14 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
     const showSidebar = !isMobileLayout && !isMailSubdomain && !isFullScreenModule;
     const showFurniture = !isMailSubdomain;
 
-    // Widths
     const sidebarWidth = isCollapsed ? 80 : 260;
 
     const phoneNavItems = [
         { id: 'dashboard', label: 'Inicio', icon: Home, color: '#42A5F5' },
         { id: 'production', label: 'Producción', icon: Factory, color: '#66BB6A' },
-        { id: 'emails', label: 'Correos', icon: Mail, color: '#10B981', priority: true }, // PRIORIDAD CENTRAL
+        { id: 'emails', label: 'Correos', icon: Mail, color: '#10B981', priority: true },
         { id: 'clients', label: 'Clientes', icon: Users, color: '#AB47BC' },
         { id: 'inventory', label: 'Stock', icon: Package, color: '#FF7043' },
-        { id: 'quotations', label: 'Cotiz.', icon: FileText, color: '#26A69A' },
-        { id: 'guides', label: 'Guías', icon: Truck, color: '#5C6BC0' },
-        { id: 'cash-receipts', label: 'Caja', icon: DollarSign, color: '#EF5350' },
-        { id: 'purchases', label: 'Compras', icon: ShoppingCart, color: '#8D6E63' },
-        { id: 'reports', label: 'Reportes', icon: BarChart3, color: '#00ACC1' },
         { id: 'settings', label: 'Ajustes', icon: SettingsIcon, color: '#78909C' },
     ];
 
