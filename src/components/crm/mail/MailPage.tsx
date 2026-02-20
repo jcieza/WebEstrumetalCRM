@@ -54,7 +54,7 @@ const ESTRUMETAL_SIGNATURE = `
 // - [x] Update: Signature text to "Despacho de Oficina"
 // - [/] Comprehensive Overhaul: Fix structures (In Progress), HTML rendering, Multiple Recipients, Unread Counter, and Redesign Compose Modal.
 //     - [x] Phase 1: Logic Consolidation (Completed)
-import { getGravatarUrl, initGravatarHovercards, openGravatarQuickEditor, getGravatarQRUrl, getGravatarCardUrl } from '@/utils/gravatar';
+import { getGravatarUrl, initGravatarHovercards, openGravatarQuickEditor, getGravatarQRUrl, getGravatarCardUrl, fetchGravatarProfile, getGravatarHash } from '@/utils/gravatar';
 import GravatarHoverCard from './GravatarHoverCard';
 import GmailCompose from './GmailCompose';
 import { useSearchParams } from 'next/navigation';
@@ -159,6 +159,7 @@ const MailPage = () => {
     const [isMailSubdomain, setIsMailSubdomain] = useState(false);
     const [hoveredEmail, setHoveredEmail] = useState<string | null>(null);
     const [clickedEmail, setClickedEmail] = useState<string | null>(null);
+    const [cardUrl, setCardUrl] = useState<string | null>(null);
     const [hoverPosition, setHoverPosition] = useState({ x: 0, y: 0 });
 
     const [userProfile, setUserProfile] = useState(() => {
@@ -206,13 +207,30 @@ const MailPage = () => {
         }
     }, [searchParams]);
 
-    // Dismiss clicked profile card on click outside
+    // Resolve Gravatar Card URL when clicking on an email
     useEffect(() => {
-        const handler = () => setClickedEmail(null);
-        if (clickedEmail) {
-            document.addEventListener('click', handler);
-            return () => document.removeEventListener('click', handler);
+        if (!clickedEmail) {
+            setCardUrl(null);
+            return;
         }
+        let cancelled = false;
+        (async () => {
+            try {
+                const profile = await fetchGravatarProfile(clickedEmail);
+                if (cancelled) return;
+                if (profile?.profile_url) {
+                    // profile_url is like "https://gravatar.com/username"
+                    setCardUrl(`${profile.profile_url}.card`);
+                } else {
+                    // Fallback: open gravatar.com with the hash
+                    const hash = await getGravatarHash(clickedEmail);
+                    if (!cancelled) setCardUrl(`https://gravatar.com/${hash}.card`);
+                }
+            } catch {
+                if (!cancelled) setCardUrl(null);
+            }
+        })();
+        return () => { cancelled = true; };
     }, [clickedEmail]);
 
     const playSound = (type: 'send' | 'receive') => {
@@ -2105,26 +2123,38 @@ const MailPage = () => {
             )}
 
             {/* Official Gravatar Card Modal (Por Click) */}
-            {clickedEmail && (
+            {clickedEmail && cardUrl && (
                 <div
                     className="fixed inset-0 z-[9500] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md"
-                    onClick={() => setClickedEmail(null)}
+                    onClick={() => { setClickedEmail(null); setCardUrl(null); }}
                 >
                     <div
                         className={`relative w-full max-w-sm rounded-[2rem] shadow-2xl overflow-hidden animate-in zoom-in duration-200 border ${theme === 'dark' ? 'bg-[#1A1C1E] border-white/10' : 'bg-white border-slate-100'}`}
                         onClick={(e) => e.stopPropagation()}
                     >
                         <button
-                            onClick={() => setClickedEmail(null)}
+                            onClick={() => { setClickedEmail(null); setCardUrl(null); }}
                             className="absolute top-4 right-4 z-[9600] p-2 bg-black/40 hover:bg-black/60 backdrop-blur-md text-white rounded-full transition-all"
                         >
                             <X size={20} />
                         </button>
                         <iframe
-                            src={getGravatarCardUrl(clickedEmail)}
+                            src={cardUrl}
                             className="w-full h-[600px] border-none bg-transparent"
                             title="Perfil Gravatar Oficial"
                         />
+                    </div>
+                </div>
+            )}
+            {/* Loading state for card */}
+            {clickedEmail && !cardUrl && (
+                <div
+                    className="fixed inset-0 z-[9500] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md"
+                    onClick={() => { setClickedEmail(null); setCardUrl(null); }}
+                >
+                    <div className={`p-8 rounded-[2rem] shadow-2xl border flex flex-col items-center gap-4 ${theme === 'dark' ? 'bg-[#1A1C1E] border-white/10' : 'bg-white border-slate-100'}`}>
+                        <Loader2 size={32} className="animate-spin text-green-600" />
+                        <p className="text-sm font-bold text-slate-500">Cargando perfil...</p>
                     </div>
                 </div>
             )}
