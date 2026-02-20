@@ -18,6 +18,7 @@ interface GmailComposeProps {
     initialTo?: string;
     initialSubject?: string;
     initialBody?: string;
+    initialDraftId?: string | null;
     senderAccount?: string;
     onSenderChange?: (account: string) => void;
     availableAccounts?: string[];
@@ -43,6 +44,7 @@ const GmailCompose: React.FC<GmailComposeProps> = ({
     initialTo = '',
     initialSubject = '',
     initialBody = '',
+    initialDraftId = null,
     senderAccount,
     onSenderChange,
     availableAccounts = [],
@@ -62,12 +64,13 @@ const GmailCompose: React.FC<GmailComposeProps> = ({
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [showMoreMenu, setShowMoreMenu] = useState(false);
     const [showSendOptions, setShowSendOptions] = useState(false);
+    const [schedulingDate, setSchedulingDate] = useState<string>('');
     const [showLinkDialog, setShowLinkDialog] = useState(false);
     const [linkUrl, setLinkUrl] = useState('');
     const [linkText, setLinkText] = useState('');
     const [files, setFiles] = useState<File[]>([]);
     const [activeFormats, setActiveFormats] = useState<Set<string>>(new Set());
-    const [draftId, setDraftId] = useState<string | null>(null);
+    const [draftId, setDraftId] = useState<string | null>(initialDraftId);
     const [lastSaved, setLastSaved] = useState<number>(Date.now());
     const [isSavingDraft, setIsSavingDraft] = useState(false);
     const [bodyTrigger, setBodyTrigger] = useState(0);
@@ -202,6 +205,46 @@ const GmailCompose: React.FC<GmailComposeProps> = ({
         // Delete draft after send
         if (draftId) {
             await deleteDoc(doc(db, 'incoming_messages', draftId));
+        }
+    };
+
+    const handleScheduleSend = async () => {
+        if (!schedulingDate) {
+            alert('Por favor selecciona una fecha y hora');
+            return;
+        }
+
+        const allTo = recipients.join(', ');
+        if (!allTo || !senderAccount) return;
+
+        setIsSavingDraft(true);
+        try {
+            const draftData = {
+                from: senderAccount,
+                to: allTo,
+                subject,
+                body: editorRef.current?.innerHTML || '',
+                status: 'SCHEDULED', // Estado para la Cloud Function futura
+                scheduledAt: new Date(schedulingDate).toISOString(),
+                receivedAt: new Date().toISOString(),
+                folder: 'outbox', // Simulando bandeja de salida
+                updatedAt: serverTimestamp()
+            };
+
+            if (draftId) {
+                await updateDoc(doc(db, 'incoming_messages', draftId), draftData);
+            } else {
+                await addDoc(collection(db, 'incoming_messages'), draftData);
+            }
+
+            // Cerrar y notificar (el MailPage u otra vista mostrara Toast si fuera un full prop, por ahora solo console o cerrar)
+            onClose();
+        } catch (e) {
+            console.error('Error scheduling email:', e);
+            alert('Hubo un error al programar el correo');
+        } finally {
+            setIsSavingDraft(false);
+            setShowSendOptions(false);
         }
     };
 
@@ -646,16 +689,25 @@ const GmailCompose: React.FC<GmailComposeProps> = ({
                                         <p className="text-[10px] text-slate-400">Enviar inmediatamente</p>
                                     </div>
                                 </button>
-                                <button
-                                    onClick={() => { setShowSendOptions(false); alert('Funcion de programacion pendiente de implementar con backend'); }}
-                                    className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-all ${theme === 'dark' ? 'hover:bg-slate-800' : 'hover:bg-slate-50'}`}
-                                >
-                                    <Clock size={14} className="text-orange-500" />
-                                    <div>
-                                        <p className={`text-xs font-bold ${theme === 'dark' ? 'text-slate-200' : 'text-slate-700'}`}>Programar envio</p>
-                                        <p className="text-[10px] text-slate-400">Elegir fecha y hora</p>
-                                    </div>
-                                </button>
+
+                                <div className={`p-4 border-t ${theme === 'dark' ? 'border-white/10' : 'border-slate-100'}`}>
+                                    <p className={`text-xs font-bold mb-2 flex items-center gap-2 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}>
+                                        <Clock size={14} className="text-orange-500" /> Programar nvio
+                                    </p>
+                                    <input
+                                        type="datetime-local"
+                                        value={schedulingDate}
+                                        onChange={(e) => setSchedulingDate(e.target.value)}
+                                        className={`w-full text-sm p-2 rounded outline-none border mb-2 ${theme === 'dark' ? 'bg-slate-800 border-white/20 text-white color-scheme-dark' : 'bg-slate-50 border-slate-200 text-slate-800'}`}
+                                    />
+                                    <button
+                                        onClick={handleScheduleSend}
+                                        disabled={!schedulingDate || isSavingDraft}
+                                        className="w-full bg-[#0b57d0] text-white text-xs font-bold py-2 rounded hover:bg-[#0842a0] disabled:opacity-50 transition-colors"
+                                    >
+                                        Confirmar Programacion
+                                    </button>
+                                </div>
                             </div>
                         )}
                     </div>
@@ -786,7 +838,7 @@ const GmailCompose: React.FC<GmailComposeProps> = ({
                     pointer-events: none;
                 }
             `}</style>
-        </div>
+        </div >
     );
 };
 

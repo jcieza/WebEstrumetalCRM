@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Mail, Search, Clock, User, ArrowRight, ShieldCheck, Inbox, Archive, Trash2, Send, Paperclip, Download, Loader2, Eye, X, Settings as SettingsIcon, Smile, Type, ChevronRight, Image as ImageIcon, Menu, Star, Plus, Layout, MoreVertical, Share2, AlarmClock, CheckSquare, Tag } from 'lucide-react';
+import { Mail, Search, Clock, User, ArrowRight, ShieldCheck, Inbox, Archive, Trash2, Send, Paperclip, Download, Loader2, Eye, X, Settings as SettingsIcon, Smile, Type, ChevronRight, Image as ImageIcon, Menu, Star, Plus, Layout, MoreVertical, Share2, AlarmClock, CheckSquare, Tag, UploadCloud } from 'lucide-react';
 import { db, auth, storage } from '@/lib/firebase';
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, addDoc, limit, where, getDocs, getDoc } from 'firebase/firestore';
 import { algoliasearch } from 'algoliasearch';
@@ -86,6 +86,8 @@ const GMAIL_THEME = {
     }
 };
 
+const ADMIN_USERS = ['ventas@ciaestrumetal.com', 'administracion@ciaestrumetal.com'];
+
 const MailPage = () => {
     const { updateProfile } = useAuth();
 
@@ -109,11 +111,15 @@ const MailPage = () => {
     // New feature states
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [activeCategory, setActiveCategory] = useState<'primary' | 'promotions' | 'social'>('primary');
-    const [showSnoozeDialog, setShowSnoozeDialog] = useState(false);
+    const [snoozeDialogData, setSnoozeDialogData] = useState<any>(null);
+
+    // Draft resumption
+    const [draftIdToResume, setDraftIdToResume] = useState<string | null>(null);
     const [showMoreMenu, setShowMoreMenu] = useState(false);
     const [showReactionPicker, setShowReactionPicker] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'mail' | 'meet'>('mail');
-    const [toasts, setToasts] = useState<{ id: number; type: 'success' | 'new' | 'info'; message: string }[]>([]);
+    // UI states
+    const [toasts, setToasts] = useState<{ id: string; type: 'success' | 'new' | 'info' | 'error'; message: string }[]>([]);
 
     // Editor State
     const [senderAccount, setSenderAccount] = useState('ventas@ciaestrumetal.com');
@@ -164,8 +170,9 @@ const MailPage = () => {
         };
     });
 
-    const addToast = (type: 'success' | 'new' | 'info', message: string) => {
-        const id = Date.now();
+    // Toast system
+    const addToast = (type: 'success' | 'new' | 'info' | 'error', message: string) => {
+        const id = Math.random().toString(36).substr(2, 9);
         setToasts(prev => [...prev, { id, type, message }]);
         setTimeout(() => {
             setToasts(prev => prev.filter(t => t.id !== id));
@@ -219,6 +226,11 @@ const MailPage = () => {
         const q = query(collection(db, 'incoming_messages'), orderBy('receivedAt', 'desc'), limit(limitCount));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const userEmail = auth.currentUser?.email;
+
+            // TODO: En el futuro esto debería venir de Custom Claims del Token o de Firestore 'users'
+            const ADMIN_USERS = ['josue.cieza@ciaestrumetal.com', 'ventas@ciaestrumetal.com', 'administracion@ciaestrumetal.com'];
+            const isAdmin = userEmail && ADMIN_USERS.includes(userEmail);
+
             const msgs = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data(),
@@ -226,8 +238,13 @@ const MailPage = () => {
             } as EmailMessage))
                 .filter(m => {
                     const publicAccounts = ['ventas@ciaestrumetal.com', 'administracion@ciaestrumetal.com'];
-                    if (publicAccounts.includes(m.to) || publicAccounts.includes(m.from)) return true;
+
+                    // Solo los administradores pueden ver los correos de bandejas públicas por defecto
+                    if (isAdmin && (publicAccounts.includes(m.to) || publicAccounts.includes(m.from))) return true;
+
+                    // El usuario siempre puede ver sus propios correos
                     if (userEmail && (m.to === userEmail || m.from === userEmail)) return true;
+
                     return false;
                 });
 
@@ -290,8 +307,8 @@ const MailPage = () => {
                         { indexName: 'estrumetal_mail', query: searchQuery, hitsPerPage: 50 }
                     ]
                 });
-                if (results && results[0]) {
-                    const hits = results[0].hits.map((h: any) => ({
+                if (results && results[0] && 'hits' in results[0]) {
+                    const hits = (results[0] as any).hits.map((h: any) => ({
                         id: h.objectID,
                         ...h,
                         receivedAt: h.receivedAt || new Date(h.receivedAtTimestamp).toISOString(),
@@ -511,6 +528,8 @@ const MailPage = () => {
 
             if (response.ok) {
                 await updateDoc(doc(db, 'incoming_messages', selectedMessage.id), { replied: true, status: 'READ' });
+
+                // Guardar como "Enviado" para el remitente
                 await saveMessageToFirestore({
                     from: senderAccount,
                     to: selectedMessage.from,
@@ -518,11 +537,43 @@ const MailPage = () => {
                     body,
                     status: 'SENT'
                 });
+
+                // Si el destinatario es interno (@ciaestrumetal.com), generar una copia en su Bandeja de Entrada (NEW)
+                if (selectedMessage.from.includes('@ciaestrumetal.com')) {
+                    await saveMessageToFirestore({
+                        from: senderAccount,
+                        to: selectedMessage.from,
+                        subject: `Re: ${selectedMessage.subject}`,
+                        body,
+                        status: 'NEW'
+                    });
+                }
+
                 playSound('send');
                 addToast('success', 'Respuesta enviada');
                 setReplyText('');
             }
-        } catch (e) { console.error("Send reply error:", e); }
+        } catch (e: any) {
+            console.error('Reply send error:', e);
+            try {
+                const failedReply = {
+                    from: senderAccount,
+                    to: selectedMessage.from,
+                    subject: `Re: ${selectedMessage.subject}`,
+                    body: replyText,
+                    status: 'FAILED',
+                    folder: 'outbox',
+                    errorLog: e.message || 'Error desconocido al responder',
+                    receivedAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                };
+                await addDoc(collection(db, 'incoming_messages'), failedReply);
+                addToast('error', 'Error al enviar la respuesta. Se ha guardado en la Bandeja de Salida.');
+            } catch (saveError) {
+                console.error('Error saving failed reply:', saveError);
+                addToast('error', 'Error drastico: no se pudo guardar la respuesta fallida.');
+            }
+        }
     };
 
     const executeSendNew = async () => {
@@ -549,6 +600,7 @@ const MailPage = () => {
                 });
 
                 if (response.ok) {
+                    // Guardar como "Enviado" en el historial del remitente
                     await saveMessageToFirestore({
                         from: senderAccount,
                         to: recipient,
@@ -557,13 +609,54 @@ const MailPage = () => {
                         status: 'SENT',
                         attachments
                     });
+
+                    // Si el destinatario es del mismo dominio, agregar copia a los Recibidos del destino
+                    if (recipient.includes('@ciaestrumetal.com')) {
+                        await saveMessageToFirestore({
+                            from: senderAccount,
+                            to: recipient,
+                            subject: composeSubject,
+                            body,
+                            status: 'NEW',
+                            attachments
+                        });
+                    }
                 }
             }
             playSound('send');
             addToast('success', `Mensaje enviado a ${recipients.length} destinatario(s)`);
             setShowCompose(false);
             setComposeTo(''); setComposeSubject(''); setComposeBody(''); setComposeFiles([]);
-        } catch (e) { console.error("Send new error:", e); }
+            if (draftIdToResume) {
+                await deleteDoc(doc(db, 'incoming_messages', draftIdToResume));
+                setDraftIdToResume(null);
+            }
+        } catch (e: any) {
+            console.error("Send new error:", e);
+            // Guardar en Bandeja de Salida (Outbox) con estado de ERROR
+            try {
+                const failedMessage = {
+                    from: senderAccount,
+                    to: composeTo,
+                    subject: composeSubject,
+                    body: composeBody,
+                    status: 'FAILED',
+                    folder: 'outbox',
+                    errorLog: e.message || 'Error desconocido al enviar',
+                    receivedAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                };
+                if (draftIdToResume) {
+                    await updateDoc(doc(db, 'incoming_messages', draftIdToResume), failedMessage);
+                } else {
+                    await addDoc(collection(db, 'incoming_messages'), failedMessage);
+                }
+                addToast('error', 'Error al enviar el mensaje. Se ha guardado en la Bandeja de Salida.');
+            } catch (saveError) {
+                console.error("No se pudo guardar en la bandeja de salida:", saveError);
+                addToast('error', 'Error crtico: el mensaje no se pudo enviar ni guardar.');
+            }
+        }
     };
 
     // ==========================================
@@ -629,7 +722,7 @@ const MailPage = () => {
         try {
             await updateDoc(doc(db, 'incoming_messages', msgId), { snoozedUntil: snoozedUntil.toISOString() });
             addToast('success', `Mensaje pospuesto hasta ${snoozedUntil.toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`);
-            setShowSnoozeDialog(false);
+            setSnoozeDialogData(null);
         } catch (e) { console.error('Snooze error:', e); }
     };
 
@@ -667,7 +760,9 @@ const MailPage = () => {
         try {
             await updateDoc(doc(db, 'incoming_messages', msgId), { reactions: updated });
             setShowReactionPicker(null);
-        } catch (e) { console.error('Reaction error:', e); }
+        } catch (e: any) {
+            console.error('Reaction error:', e);
+        }
     };
 
     // Advanced Filtering
@@ -761,7 +856,7 @@ const MailPage = () => {
                 </div>
 
                 <button
-                    onClick={() => { setComposeTo(''); setComposeSubject(''); setComposeBody(''); setComposeFiles([]); setShowCompose(true); }}
+                    onClick={() => { setComposeTo(''); setComposeSubject(''); setComposeBody(''); setComposeFiles([]); setDraftIdToResume(null); setShowCompose(true); }}
                     className={`w-full p-4 rounded-3xl flex items-center justify-center gap-3 shadow-xl transition-all font-black text-xs uppercase tracking-widest mb-6 border ${theme === 'dark' ? 'bg-slate-800 hover:bg-slate-700 text-white border-white/10' : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-100'}`}
                 >
                     <Plus size={20} className="text-green-600" />
@@ -772,6 +867,7 @@ const MailPage = () => {
                     {[
                         { id: 'inbox', label: 'Recibidos', icon: Inbox },
                         { id: 'sent', label: 'Enviados', icon: Send },
+                        { id: 'outbox', label: 'Bandeja de Salida', icon: UploadCloud },
                         { id: 'drafts', label: 'Borradores', icon: Clock },
                         { id: 'archived', label: 'Archivados', icon: Archive },
                         { id: 'trash', label: 'Papelera', icon: Trash2 },
@@ -950,17 +1046,17 @@ const MailPage = () => {
                         </div>
                     )}
                 </div>
-            </div>
 
-            {/* Mobile Actions Glass */}
-            {!selectedMessage && (
-                <button
-                    onClick={() => { setComposeTo(''); setComposeSubject(''); setComposeBody(''); setComposeFiles([]); setShowCompose(true); }}
-                    className="md:hidden fixed bottom-24 right-6 w-14 h-14 bg-green-600 text-white rounded-full shadow-2xl flex items-center justify-center z-50 animate-bounce"
-                >
-                    <Plus size={24} />
-                </button>
-            )}
+                {/* Mobile Actions Glass */}
+                {!selectedMessage && (
+                    <button
+                        onClick={() => { setComposeTo(''); setComposeSubject(''); setComposeBody(''); setComposeFiles([]); setDraftIdToResume(null); setShowCompose(true); }}
+                        className="md:hidden fixed bottom-24 right-6 w-14 h-14 bg-green-600 text-white rounded-full shadow-2xl flex items-center justify-center z-50 animate-bounce"
+                    >
+                        <Plus size={24} />
+                    </button>
+                )}
+            </div>
         </div>
     );
 
@@ -1039,7 +1135,7 @@ const MailPage = () => {
                     >
                         <div className="px-4 mb-6 hidden md:block">
                             <button
-                                onClick={() => { setComposeTo(''); setComposeSubject(''); setComposeBody(''); setComposeFiles([]); setShowCompose(true); }}
+                                onClick={() => { setComposeTo(''); setComposeSubject(''); setComposeBody(''); setComposeFiles([]); setDraftIdToResume(null); setShowCompose(true); }}
                                 className="bg-[#C2E7FF] text-[#001D35] px-6 py-4 rounded-2xl flex items-center gap-4 hover:shadow-lg transition-all font-bold text-sm shadow-sm w-full"
                             >
                                 <Plus size={20} /> Redactar
@@ -1079,7 +1175,7 @@ const MailPage = () => {
                         <div
                             className="md:hidden fixed inset-0 bg-black/60 z-[55] backdrop-blur-sm"
                             onClick={() => setShowMobileSidebar(false)}
-                        />
+                        ></div>
                     )}
 
                     {/* List Area Modern */}
@@ -1202,12 +1298,17 @@ const MailPage = () => {
                                 </div>
                             </div>
                             <div className="flex-1 overflow-y-auto p-6 md:p-8 no-scrollbar">
-                                <div className="flex items-center gap-4 mb-8">
-                                    <div className="w-10 h-10 rounded-full bg-[#0B57D0] text-white flex items-center justify-center font-bold text-sm">
-                                        {selectedMessage.from.charAt(0).toUpperCase()}
-                                    </div>
+                                <div className="flex items-center gap-4 mb-8 relative">
+                                    <button
+                                        className="w-10 h-10 rounded-full bg-[#0B57D0] text-white flex items-center justify-center font-bold text-sm hover:ring-2 hover:ring-[#0B57D0] hover:ring-offset-2 transition-all cursor-pointer overflow-hidden border border-transparent shadow-sm"
+                                        onClick={(e) => { e.stopPropagation(); setClickedEmail(selectedMessage.from.includes('<') ? selectedMessage.from.split('<')[1].split('>')[0] : selectedMessage.from); }}
+                                    >
+                                        <img src={getGravatarUrl(selectedMessage.from.includes('<') ? selectedMessage.from.split('<')[1].split('>')[0] : selectedMessage.from, 100)} alt="Avatar" className="w-full h-full object-cover" />
+                                    </button>
                                     <div className="min-w-0">
-                                        <p className="text-sm font-bold truncate">{selectedMessage.from}</p>
+                                        <p className="text-sm font-bold truncate cursor-pointer hover:underline decoration-slate-300" onClick={(e) => { e.stopPropagation(); setClickedEmail(selectedMessage.from.includes('<') ? selectedMessage.from.split('<')[1].split('>')[0] : selectedMessage.from); }}>
+                                            {selectedMessage.from}
+                                        </p>
                                         <p className="text-[10px] text-slate-500 font-medium">Para: {selectedMessage.to} • {new Date(selectedMessage.receivedAt).toLocaleString()}</p>
                                     </div>
                                 </div>
@@ -1244,17 +1345,18 @@ const MailPage = () => {
                                 </button>
                             </div>
                         </div>
-                    )}
-                </div>
+                    )
+                    }
 
-                {/* FAB - Redactar Mobile Gmail Style */}
-                <button
-                    onClick={() => { setComposeTo(''); setComposeSubject(''); setComposeBody(''); setComposeFiles([]); setShowCompose(true); }}
-                    className="md:hidden fixed bottom-6 right-6 w-16 h-16 bg-[#D3E3FD] text-[#041E49] rounded-2xl shadow-xl flex items-center justify-center z-50 hover:scale-105 active:scale-95 transition-all"
-                >
-                    <Plus size={28} />
-                </button>
-            </div>
+                    {/* FAB - Default Modern Gmail Style */}
+                    <button
+                        onClick={() => { setComposeTo(''); setComposeSubject(''); setComposeBody(''); setComposeFiles([]); setDraftIdToResume(null); setShowCompose(true); }}
+                        className="md:hidden fixed bottom-6 right-6 w-16 h-16 bg-[#D3E3FD] text-[#041E49] rounded-2xl shadow-xl flex items-center justify-center z-50 hover:scale-105 active:scale-95 transition-all"
+                    >
+                        <Plus size={28} />
+                    </button>
+                </div >
+            </div >
         );
     };
 
@@ -1332,7 +1434,7 @@ const MailPage = () => {
                     >
                         <div className="px-4 mb-4">
                             <button
-                                onClick={() => { setComposeTo(''); setComposeSubject(''); setComposeBody(''); setComposeFiles([]); setShowCompose(true); }}
+                                onClick={() => { setComposeTo(''); setComposeSubject(''); setComposeBody(''); setComposeFiles([]); setDraftIdToResume(null); setShowCompose(true); }}
                                 className="hidden md:flex bg-[#C2E7FF] text-[#001D35] px-6 py-5 rounded-2xl items-center gap-4 hover:shadow-lg transition-all font-bold text-sm shadow-sm"
                             >
                                 <Plus size={24} /> <span className="text-base">Redactar</span>
@@ -1342,6 +1444,7 @@ const MailPage = () => {
                         {[
                             { id: 'inbox', label: 'Recibidos', icon: Inbox },
                             { id: 'sent', label: 'Enviados', icon: Send },
+                            { id: 'outbox', label: 'Bandeja de Salida', icon: UploadCloud },
                             { id: 'drafts', label: 'Borradores', icon: Clock },
                             { id: 'archived', label: 'Archivados', icon: Archive },
                             { id: 'trash', label: 'Papelera', icon: Trash2 },
@@ -1419,6 +1522,17 @@ const MailPage = () => {
                                     <button
                                         key={msg.id}
                                         onClick={() => {
+                                            if (currentFolder === 'drafts' || msg.status === 'DRAFT') {
+                                                // Reabrir borrador en editor
+                                                setComposeTo(msg.to);
+                                                setComposeSubject(msg.subject);
+                                                setComposeBody(msg.body);
+                                                // Necesitaríamos guardar draftId en el estado de MailPage para pasárselo a GmailCompose
+                                                // Asumiremos que el renderizador de GmailCompose acepta estas props (ya añadimos initialDraftId)
+                                                setDraftIdToResume(msg.id);
+                                                setShowCompose(true);
+                                                return;
+                                            }
                                             setSelectedMessage(msg);
                                             if (isUnread) markAsRead(msg.id);
                                         }}
@@ -1505,237 +1619,240 @@ const MailPage = () => {
                                 </div>
                             )}
                         </div>
+                    </div>
 
-                        {/* Overlay Message View */}
-                        {selectedMessage && (
-                            <div
-                                className="absolute inset-0 z-40 bg-white flex flex-col md:rounded-2xl animate-in slide-in-from-bottom-4 duration-200"
-                            >
-                                {/* Gmail Toolbar */}
-                                <div className="h-14 md:h-12 flex items-center justify-between px-2 md:px-4 border-b border-slate-100 shrink-0">
-                                    <div className="flex items-center gap-1 md:gap-4">
-                                        <button onClick={() => setSelectedMessage(null)} className="p-2 hover:bg-slate-100 rounded-full transition-all text-slate-600">
-                                            <ArrowRight size={20} className="rotate-180" />
-                                        </button>
-                                        <div className="flex items-center gap-0.5 md:gap-1">
+                    {/* Overlay Message View */}
+                    {selectedMessage && (
+                        <div
+                            className="absolute inset-0 z-40 bg-white flex flex-col md:rounded-2xl animate-in slide-in-from-bottom-4 duration-200"
+                        >
+                            {/* Gmail Toolbar */}
+                            <div className="h-14 md:h-12 flex items-center justify-between px-2 md:px-4 border-b border-slate-100 shrink-0">
+                                <div className="flex items-center gap-1 md:gap-4">
+                                    <button onClick={() => setSelectedMessage(null)} className="p-2 hover:bg-slate-100 rounded-full transition-all text-slate-600">
+                                        <ArrowRight size={20} className="rotate-180" />
+                                    </button>
+                                    <div className="flex items-center gap-0.5 md:gap-1">
+                                        {[
+                                            { icon: Archive, label: 'Archivar', action: () => handleArchive(selectedMessage) },
+                                            { icon: Trash2, label: 'Eliminar', action: () => handleDelete(selectedMessage) },
+                                            { icon: Mail, label: 'Marcar no leido', action: () => markAsUnread(selectedMessage.id) },
+                                            { icon: AlarmClock, label: 'Posponer', action: () => setSnoozeDialogData(selectedMessage.id) },
+                                            { icon: MoreVertical, label: 'Mas', action: () => setShowMoreMenu(!showMoreMenu) },
+                                        ].map((btn, i) => (
+                                            <button
+                                                key={i}
+                                                onClick={btn.action}
+                                                title={btn.label}
+                                                className={`p-2 hover:bg-slate-100 rounded-full transition-all text-slate-600 ${i > 2 ? 'hidden md:flex' : 'flex'}`}
+                                            >
+                                                <btn.icon size={18} />
+                                            </button>
+                                        ))}
+                                    </div>
+                                    {/* More menu dropdown */}
+                                    {showMoreMenu && (
+                                        <div className="absolute top-10 left-40 bg-white rounded-lg shadow-xl border border-slate-200 py-1 z-50 min-w-[200px]">
                                             {[
-                                                { icon: Archive, label: 'Archivar', action: () => handleArchive(selectedMessage) },
-                                                { icon: Trash2, label: 'Eliminar', action: () => handleDelete(selectedMessage) },
-                                                { icon: Mail, label: 'Marcar no leido', action: () => markAsUnread(selectedMessage.id) },
-                                                { icon: AlarmClock, label: 'Posponer', action: () => setShowSnoozeDialog(true) },
-                                                { icon: MoreVertical, label: 'Mas', action: () => setShowMoreMenu(!showMoreMenu) },
-                                            ].map((btn, i) => (
-                                                <button
-                                                    key={i}
-                                                    onClick={btn.action}
-                                                    title={btn.label}
-                                                    className={`p-2 hover:bg-slate-100 rounded-full transition-all text-slate-600 ${i > 2 ? 'hidden md:flex' : 'flex'}`}
-                                                >
-                                                    <btn.icon size={18} />
+                                                { label: 'Marcar como spam', action: () => { handleDelete(selectedMessage); setShowMoreMenu(false); } },
+                                                { label: 'Marcar como leido', action: () => { markAsRead(selectedMessage.id); setShowMoreMenu(false); } },
+                                                { label: 'Destacar', action: () => { toggleStar(selectedMessage.id); setShowMoreMenu(false); } },
+                                                { label: 'Imprimir', action: () => { window.print(); setShowMoreMenu(false); } },
+                                            ].map((item, i) => (
+                                                <button key={i} onClick={item.action} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors">
+                                                    {item.label}
                                                 </button>
                                             ))}
                                         </div>
-                                        {/* More menu dropdown */}
-                                        {showMoreMenu && (
-                                            <div className="absolute top-10 left-40 bg-white rounded-lg shadow-xl border border-slate-200 py-1 z-50 min-w-[200px]">
-                                                {[
-                                                    { label: 'Marcar como spam', action: () => { handleDelete(selectedMessage); setShowMoreMenu(false); } },
-                                                    { label: 'Marcar como leido', action: () => { markAsRead(selectedMessage.id); setShowMoreMenu(false); } },
-                                                    { label: 'Destacar', action: () => { toggleStar(selectedMessage.id); setShowMoreMenu(false); } },
-                                                    { label: 'Imprimir', action: () => { window.print(); setShowMoreMenu(false); } },
-                                                ].map((item, i) => (
-                                                    <button key={i} onClick={item.action} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors">
-                                                        {item.label}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        )}
-                                        {/* Snooze dialog */}
-                                        {showSnoozeDialog && (
-                                            <div className="absolute top-10 left-28 bg-white rounded-xl shadow-xl border border-slate-200 py-2 z-50 min-w-[220px]">
-                                                <p className="px-4 py-2 text-xs font-bold text-slate-500 uppercase tracking-wider">Posponer hasta</p>
-                                                {[
-                                                    { label: 'En 1 hora', value: '1h' },
-                                                    { label: 'En 3 horas', value: '3h' },
-                                                    { label: 'Manana, 8:00 AM', value: 'tomorrow' },
-                                                    { label: 'Proxima semana', value: 'next_week' },
-                                                ].map(opt => (
-                                                    <button
-                                                        key={opt.value}
-                                                        onClick={() => handleSnooze(selectedMessage.id, opt.value)}
-                                                        className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-[#D3E3FD] transition-colors flex items-center gap-3"
-                                                    >
-                                                        <AlarmClock size={16} className="text-slate-400" />
-                                                        {opt.label}
-                                                    </button>
-                                                ))}
-                                                <button onClick={() => setShowSnoozeDialog(false)} className="w-full text-left px-4 py-2 text-xs text-slate-400 hover:bg-slate-50 mt-1 border-t border-slate-100">
-                                                    Cancelar
+                                    )}
+                                    {/* Snooze dialog */}
+                                    {snoozeDialogData === selectedMessage.id && (
+                                        <div className="absolute top-10 left-28 bg-white rounded-xl shadow-xl border border-slate-200 py-2 z-50 min-w-[220px]">
+                                            <p className="px-4 py-2 text-xs font-bold text-slate-500 uppercase tracking-wider">Posponer hasta</p>
+                                            {[
+                                                { label: 'En 1 hora', value: '1h' },
+                                                { label: 'En 3 horas', value: '3h' },
+                                                { label: 'Manana, 8:00 AM', value: 'tomorrow' },
+                                                { label: 'Proxima semana', value: 'next_week' },
+                                            ].map(opt => (
+                                                <button
+                                                    key={opt.value}
+                                                    onClick={() => handleSnooze(selectedMessage.id, opt.value)}
+                                                    className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-[#D3E3FD] transition-colors flex items-center gap-3"
+                                                >
+                                                    <AlarmClock size={16} className="text-slate-400" />
+                                                    {opt.label}
                                                 </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="hidden sm:flex items-center gap-4 text-xs text-slate-500 font-medium">
-                                        <span>{currentMessageIndex >= 0 ? `${currentMessageIndex + 1} de ${filteredMessages.length}` : ''}</span>
-                                        <div className="flex items-center gap-1">
-                                            <button
-                                                onClick={() => navigateMessage('prev')}
-                                                disabled={currentMessageIndex <= 0}
-                                                className={`p-2 hover:bg-slate-100 rounded-full transition-all ${currentMessageIndex <= 0 ? 'text-slate-300' : 'text-slate-600'}`}
-                                            >
-                                                <ChevronRight size={18} className="rotate-180" />
-                                            </button>
-                                            <button
-                                                onClick={() => navigateMessage('next')}
-                                                disabled={currentMessageIndex >= filteredMessages.length - 1}
-                                                className={`p-2 hover:bg-slate-100 rounded-full transition-all ${currentMessageIndex >= filteredMessages.length - 1 ? 'text-slate-300' : 'text-slate-600'}`}
-                                            >
-                                                <ChevronRight size={18} />
+                                            ))}
+                                            <button onClick={() => setSnoozeDialogData(null)} className="w-full text-left px-4 py-2 text-xs text-slate-400 hover:bg-slate-50 mt-1 border-t border-slate-100">
+                                                Cancelar
                                             </button>
                                         </div>
-                                    </div>
+                                    )}
                                 </div>
-
-                                <div className="flex-1 overflow-y-auto no-scrollbar">
-                                    <div className="max-w-4xl mx-auto px-6 py-8 md:px-12">
-                                        {/* Subject */}
-                                        <div className="flex items-start justify-between mb-6 md:mb-8">
-                                            <h1 className="text-xl md:text-[22px] font-normal text-[#1f1f1f] leading-tight flex-1">
-                                                {selectedMessage.subject}
-                                                <span className="ml-2 px-1.5 py-0.5 bg-slate-100 text-slate-500 text-[10px] font-medium rounded uppercase tracking-wider inline-block align-middle">Recibidos</span>
-                                            </h1>
-                                            <div className="flex items-center gap-2 md:gap-4 ml-4">
-                                                <button onClick={() => toggleStar(selectedMessage.id)} className={`p-2 hover:bg-slate-100 rounded-full transition-colors ${selectedMessage.starred ? 'text-yellow-400' : 'text-slate-400'}`}>
-                                                    <Star size={20} fill={selectedMessage.starred ? 'currentColor' : 'none'} />
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        {/* Sender Metadata */}
-                                        <div className="flex items-start gap-4 mb-8">
-                                            <div className="w-10 h-10 rounded-full bg-[#0B57D0] text-white flex items-center justify-center font-bold text-sm shrink-0">
-                                                {selectedMessage.from.charAt(0).toUpperCase()}
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-sm font-bold text-slate-900">{selectedMessage.from.split('<')[0].trim() || selectedMessage.from}</span>
-                                                        <span className="text-xs text-slate-500">&lt;{selectedMessage.from.includes('<') ? selectedMessage.from.split('<')[1].split('>')[0] : selectedMessage.from}&gt;</span>
-                                                    </div>
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="text-xs text-slate-500">{new Date(selectedMessage.receivedAt).toLocaleString([], { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                                                        <div className="flex items-center gap-1">
-                                                            <button onClick={() => toggleStar(selectedMessage.id)} className={`p-1 hover:bg-slate-100 rounded transition-colors ${selectedMessage.starred ? 'text-yellow-400' : 'text-slate-400'}`}>
-                                                                <Star size={18} fill={selectedMessage.starred ? 'currentColor' : 'none'} />
-                                                            </button>
-                                                            <button onClick={() => setShowReactionPicker(showReactionPicker === selectedMessage.id ? null : selectedMessage.id)} className="p-1 hover:bg-slate-100 rounded text-slate-400 relative">
-                                                                <Smile size={18} />
-                                                            </button>
-                                                            <button onClick={() => { setReplyText(''); setShowCompose(true); setComposeTo(selectedMessage.from); setComposeSubject(`Re: ${selectedMessage.subject}`); }} className="p-1 hover:bg-slate-100 rounded text-slate-400">
-                                                                <ArrowRight size={18} className="rotate-180" />
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <p className="text-xs text-slate-500 mt-0.5">para {selectedMessage.to === senderAccount ? 'mi' : selectedMessage.to}</p>
-                                            </div>
-                                        </div>
-
-                                        {/* Reaction Picker */}
-                                        {showReactionPicker === selectedMessage.id && (
-                                            <div className="mb-6 flex items-center gap-1 p-2 bg-white rounded-full shadow-lg border border-slate-200 w-fit">
-                                                {REACTION_EMOJIS.map(emoji => (
-                                                    <button
-                                                        key={emoji}
-                                                        onClick={() => toggleReaction(selectedMessage.id, emoji)}
-                                                        className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 text-xl transition-all hover:scale-125"
-                                                    >
-                                                        {emoji}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        )}
-
-                                        {/* Existing Reactions Display */}
-                                        {selectedMessage.reactions && selectedMessage.reactions.length > 0 && (
-                                            <div className="mb-6 flex flex-wrap gap-2">
-                                                {Object.entries(
-                                                    selectedMessage.reactions.reduce((acc, r) => {
-                                                        acc[r.emoji] = (acc[r.emoji] || 0) + 1;
-                                                        return acc;
-                                                    }, {} as Record<string, number>)
-                                                ).map(([emoji, count]) => (
-                                                    <button
-                                                        key={emoji}
-                                                        onClick={() => toggleReaction(selectedMessage.id, emoji)}
-                                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm transition-all hover:shadow-sm ${selectedMessage.reactions?.some(r => r.emoji === emoji && r.userId === (auth.currentUser?.uid || 'anonymous'))
-                                                            ? 'bg-[#D3E3FD] border-[#0B57D0]/30 text-[#041E49]'
-                                                            : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                                                            }`}
-                                                    >
-                                                        <span className="text-base">{emoji}</span>
-                                                        <span className="text-xs font-bold">{count}</span>
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        )}
-
-                                        {/* Email Content */}
-                                        <div className="mb-12">
-                                            <EmailBodyViewer html={selectedMessage.body} theme={theme} />
-                                        </div>
-
-                                        {/* Attachments */}
-                                        {selectedMessage.attachments && selectedMessage.attachments.length > 0 && (
-                                            <div className="mt-8 border-t border-slate-100 pt-8">
-                                                <p className="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
-                                                    <Paperclip size={16} /> Adjuntos ({selectedMessage.attachments.length})
-                                                </p>
-                                                <div className="flex flex-wrap gap-4">
-                                                    {selectedMessage.attachments.map((att, i) => (
-                                                        <div key={i} className="flex flex-col w-48 rounded-lg border border-slate-200 overflow-hidden group hover:shadow-md transition-all">
-                                                            <div className="h-28 bg-slate-50 flex items-center justify-center relative">
-                                                                <ImageIcon size={32} className="text-slate-200" />
-                                                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
-                                                                    <a href={att.url} download target="_blank" rel="noreferrer" className="p-2 bg-white rounded-full shadow-lg text-[#0B57D0]"><Download size={18} /></a>
-                                                                </div>
-                                                            </div>
-                                                            <div className="p-3 bg-white">
-                                                                <p className="text-[11px] font-bold truncate text-slate-700">{att.filename}</p>
-                                                                <p className="text-[9px] text-slate-400 font-medium">{(att.size / 1024).toFixed(1)} KB</p>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* Bottom Actions */}
-                                        <div className="mt-12 flex gap-3">
-                                            <button
-                                                onClick={() => { setReplyText(''); setShowCompose(true); setComposeTo(selectedMessage.from); setComposeSubject(`Re: ${selectedMessage.subject}`); }}
-                                                className="flex items-center gap-3 px-6 py-2.5 rounded-full border border-[#747775] text-[#1f1f1f] text-sm font-medium hover:bg-slate-50 transition-all"
-                                            >
-                                                <ArrowRight size={18} className="rotate-180" /> Responder
-                                            </button>
-                                            <button
-                                                onClick={() => handleForward(selectedMessage)}
-                                                className="flex items-center gap-3 px-6 py-2.5 rounded-full border border-[#747775] text-[#1f1f1f] text-sm font-medium hover:bg-slate-50 transition-all"
-                                            >
-                                                <Share2 size={18} /> Reenviar
-                                            </button>
-                                        </div>
+                                <div className="hidden sm:flex items-center gap-4 text-xs text-slate-500 font-medium">
+                                    <span>{currentMessageIndex >= 0 ? `${currentMessageIndex + 1} de ${filteredMessages.length}` : ''}</span>
+                                    <div className="flex items-center gap-1">
+                                        <button
+                                            onClick={() => navigateMessage('prev')}
+                                            disabled={currentMessageIndex <= 0}
+                                            className={`p-2 hover:bg-slate-100 rounded-full transition-all ${currentMessageIndex <= 0 ? 'text-slate-300' : 'text-slate-600'}`}
+                                        >
+                                            <ChevronRight size={18} className="rotate-180" />
+                                        </button>
+                                        <button
+                                            onClick={() => navigateMessage('next')}
+                                            disabled={currentMessageIndex >= filteredMessages.length - 1}
+                                            className={`p-2 hover:bg-slate-100 rounded-full transition-all ${currentMessageIndex >= filteredMessages.length - 1 ? 'text-slate-300' : 'text-slate-600'}`}
+                                        >
+                                            <ChevronRight size={18} />
+                                        </button>
                                     </div>
                                 </div>
                             </div>
-                        )}
-                    </div>
+
+                            <div className="flex-1 overflow-y-auto no-scrollbar">
+                                <div className="max-w-4xl mx-auto px-6 py-8 md:px-12">
+                                    {/* Subject */}
+                                    <div className="flex items-start justify-between mb-6 md:mb-8">
+                                        <h1 className="text-xl md:text-[22px] font-normal text-[#1f1f1f] leading-tight flex-1">
+                                            {selectedMessage.subject}
+                                            <span className="ml-2 px-1.5 py-0.5 bg-slate-100 text-slate-500 text-[10px] font-medium rounded uppercase tracking-wider inline-block align-middle">Recibidos</span>
+                                        </h1>
+                                        <div className="flex items-center gap-2 md:gap-4 ml-4">
+                                            <button onClick={() => toggleStar(selectedMessage.id)} className={`p-2 hover:bg-slate-100 rounded-full transition-colors ${selectedMessage.starred ? 'text-yellow-400' : 'text-slate-400'}`}>
+                                                <Star size={20} fill={selectedMessage.starred ? 'currentColor' : 'none'} />
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Avatar & Sender Info */}
+                                    <div className="flex items-center gap-4 mb-8">
+                                        <button
+                                            className="w-10 h-10 rounded-full bg-[#0B57D0] text-white flex items-center justify-center font-bold text-sm shadow-sm hover:ring-2 hover:ring-[#0B57D0] hover:ring-offset-1 transition-all cursor-pointer overflow-hidden"
+                                            onClick={(e) => { e.stopPropagation(); setClickedEmail(selectedMessage.from.includes('<') ? selectedMessage.from.split('<')[1].split('>')[0] : selectedMessage.from); }}
+                                        >
+                                            <img src={getGravatarUrl(selectedMessage.from.includes('<') ? selectedMessage.from.split('<')[1].split('>')[0] : selectedMessage.from, 100)} alt="Avatar" className="w-full h-full object-cover" />
+                                        </button>
+                                        <div className="min-w-0 flex-1 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-4">
+                                            <div>
+                                                <p className="text-sm font-bold text-slate-900 cursor-pointer hover:underline" onClick={(e) => { e.stopPropagation(); setClickedEmail(selectedMessage.from.includes('<') ? selectedMessage.from.split('<')[1].split('>')[0] : selectedMessage.from); }}>
+                                                    {selectedMessage.from}
+                                                </p>
+                                                <p className="text-[11px] text-slate-500 font-medium">Para mí ({selectedMessage.to})</p>
+                                            </div>
+                                            <div className="flex flex-col sm:items-end gap-2">
+                                                <span className="text-xs text-slate-500 sm:font-medium text-left sm:text-right">
+                                                    {new Date(selectedMessage.receivedAt).toLocaleString([], { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                                </span>
+                                                <div className="flex items-center gap-1">
+                                                    <button onClick={() => toggleStar(selectedMessage.id)} className={`p-1 hover:bg-slate-100 rounded transition-colors ${selectedMessage.starred ? 'text-yellow-400' : 'text-slate-400'}`}>
+                                                        <Star size={18} fill={selectedMessage.starred ? 'currentColor' : 'none'} />
+                                                    </button>
+                                                    <button onClick={() => setShowReactionPicker(showReactionPicker === selectedMessage.id ? null : selectedMessage.id)} className="p-1 hover:bg-slate-100 rounded text-slate-400 relative">
+                                                        <Smile size={18} />
+                                                    </button>
+                                                    <button onClick={() => { setReplyText(''); setShowCompose(true); setComposeTo(selectedMessage.from); setComposeSubject(`Re: ${selectedMessage.subject}`); }} className="p-1 hover:bg-slate-100 rounded text-slate-400">
+                                                        <ArrowRight size={18} className="rotate-180" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {/* Reaction Picker */}
+                                    {showReactionPicker === selectedMessage.id && (
+                                        <div className="mb-6 flex items-center gap-1 p-2 bg-white rounded-full shadow-lg border border-slate-200 w-fit">
+                                            {REACTION_EMOJIS.map(emoji => (
+                                                <button
+                                                    key={emoji}
+                                                    onClick={() => toggleReaction(selectedMessage.id, emoji)}
+                                                    className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 text-xl transition-all hover:scale-125"
+                                                >
+                                                    {emoji}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* Existing Reactions Display */}
+                                    {selectedMessage.reactions && selectedMessage.reactions.length > 0 && (
+                                        <div className="mb-6 flex flex-wrap gap-2">
+                                            {Object.entries(
+                                                selectedMessage.reactions.reduce((acc, r) => {
+                                                    acc[r.emoji] = (acc[r.emoji] || 0) + 1;
+                                                    return acc;
+                                                }, {} as Record<string, number>)
+                                            ).map(([emoji, count]) => (
+                                                <button
+                                                    key={emoji}
+                                                    onClick={() => toggleReaction(selectedMessage.id, emoji)}
+                                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm transition-all hover:shadow-sm ${selectedMessage.reactions?.some(r => r.emoji === emoji && r.userId === (auth.currentUser?.uid || 'anonymous'))
+                                                        ? 'bg-[#D3E3FD] border-[#0B57D0]/30 text-[#041E49]'
+                                                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                                                        }`}
+                                                >
+                                                    <span className="text-base">{emoji}</span>
+                                                    <span className="text-xs font-bold">{count}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* Email Content */}
+                                    <div className="mb-12">
+                                        <EmailBodyViewer html={selectedMessage.body} theme={theme} />
+                                    </div>
+
+                                    {/* Attachments */}
+                                    {selectedMessage.attachments && selectedMessage.attachments.length > 0 && (
+                                        <div className="mt-8 border-t border-slate-100 pt-8">
+                                            <p className="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
+                                                <Paperclip size={16} /> Adjuntos ({selectedMessage.attachments.length})
+                                            </p>
+                                            <div className="flex flex-wrap gap-4">
+                                                {selectedMessage.attachments.map((att, i) => (
+                                                    <div key={i} className="flex flex-col w-48 rounded-lg border border-slate-200 overflow-hidden group hover:shadow-md transition-all">
+                                                        <div className="h-28 bg-slate-50 flex items-center justify-center relative">
+                                                            <ImageIcon size={32} className="text-slate-200" />
+                                                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
+                                                                <a href={att.url} download target="_blank" rel="noreferrer" className="p-2 bg-white rounded-full shadow-lg text-[#0B57D0]"><Download size={18} /></a>
+                                                            </div>
+                                                        </div>
+                                                        <div className="p-3 bg-white">
+                                                            <p className="text-[11px] font-bold truncate text-slate-700">{att.filename}</p>
+                                                            <p className="text-[9px] text-slate-400 font-medium">{(att.size / 1024).toFixed(1)} KB</p>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Bottom Actions */}
+                                    <div className="mt-12 flex gap-3">
+                                        <button
+                                            onClick={() => { setReplyText(''); setShowCompose(true); setComposeTo(selectedMessage.from); setComposeSubject(`Re: ${selectedMessage.subject}`); }}
+                                            className="flex items-center gap-3 px-6 py-2.5 rounded-full border border-[#747775] text-[#1f1f1f] text-sm font-medium hover:bg-slate-50 transition-all"
+                                        >
+                                            <ArrowRight size={18} className="rotate-180" /> Responder
+                                        </button>
+                                        <button
+                                            onClick={() => handleForward(selectedMessage)}
+                                            className="flex items-center gap-3 px-6 py-2.5 rounded-full border border-[#747775] text-[#1f1f1f] text-sm font-medium hover:bg-slate-50 transition-all"
+                                        >
+                                            <Share2 size={18} /> Reenviar
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* FAB Gmail M3 Style */}
                 {!selectedMessage && (
                     <button
-                        onClick={() => { setComposeTo(''); setComposeSubject(''); setComposeBody(''); setComposeFiles([]); setShowCompose(true); }}
+                        onClick={() => { setComposeTo(''); setComposeSubject(''); setComposeBody(''); setComposeFiles([]); setDraftIdToResume(null); setShowCompose(true); }}
                         className="md:hidden fixed bottom-6 right-6 w-14 h-14 bg-[#C2E7FF] text-[#001D35] rounded-2xl shadow-xl flex items-center justify-center z-50 transition-all active:scale-95 shadow-[#C2E7FF]/20"
                         style={{ borderRadius: '16px' }}
                     >
@@ -1752,86 +1869,33 @@ const MailPage = () => {
     };
 
     return (
-        <>
+        <div className="h-screen w-full font-sans overflow-hidden bg-slate-50 dark:bg-slate-900 transition-colors duration-300 relative text-slate-800 dark:text-slate-100 flex">
+            {/* Dynamic Layout Rendering */}
             {renderContent()}
 
-            {/* Maximized Message View */}
-            {isMaximized && selectedMessage && (
-                <div className="fixed inset-0 z-[2500] bg-slate-950/40 backdrop-blur-md flex items-center justify-center p-4 md:p-10 animate-in fade-in zoom-in duration-300">
-                    <div className="bg-white dark:bg-slate-900 w-full h-full max-w-6xl rounded-[2rem] shadow-2xl flex flex-col overflow-hidden border border-white/20 dark:border-slate-800">
-                        <div className="p-6 md:p-10 border-b border-slate-50 dark:border-slate-800 flex justify-between items-center bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm sticky top-0 z-10">
-                            <div className="flex items-center gap-6">
-                                <div className="w-14 h-14 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-slate-400 font-black text-xl shadow-inner">
-                                    {selectedMessage.from.charAt(0).toUpperCase()}
-                                </div>
-                                <div>
-                                    <h2 className="text-xl md:text-3xl font-black text-slate-800 dark:text-slate-100 tracking-tight leading-tight">{selectedMessage.subject}</h2>
-                                    <div className="flex items-center gap-3 mt-2">
-                                        <span className="text-xs font-black uppercase tracking-widest text-slate-400">DE: {selectedMessage.from}</span>
-                                        <span className="w-1 h-1 bg-slate-200 dark:bg-slate-700 rounded-full"></span>
-                                        <span className="text-xs font-black uppercase tracking-widest text-slate-400">PARA: {selectedMessage.to}</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <button
-                                onClick={() => setIsMaximized(false)}
-                                className="p-4 bg-slate-100 dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 rounded-2xl transition-all group shadow-sm hover:shadow-md"
-                            >
-                                <X size={24} className="group-hover:rotate-90 transition-transform duration-300" />
-                            </button>
-                        </div>
-                        <div className="flex-1 overflow-y-auto p-8 md:p-16 text-slate-600 dark:text-slate-300 text-lg md:text-xl leading-relaxed font-medium bg-gradient-to-b from-white to-slate-50/30 dark:from-slate-900 dark:to-slate-950 no-scrollbar">
-                            <div className="prose dark:prose-invert max-w-none">
-                                <EmailBodyViewer html={selectedMessage.body} theme={theme} />
-                            </div>
-
-                            {selectedMessage.attachments && selectedMessage.attachments.length > 0 && (
-                                <div className="mt-12 p-8 bg-white/50 dark:bg-slate-800/50 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-sm">
-                                    <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 mb-6 flex items-center gap-3">
-                                        <Paperclip size={16} />
-                                        Documentos Adjuntos ({selectedMessage.attachments.length})
-                                    </p>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                        {selectedMessage.attachments.map((att, i) => (
-                                            <div key={i} className="group p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 hover:bg-white dark:hover:bg-slate-800 hover:shadow-xl hover:border-green-100 dark:hover:border-green-900 transition-all cursor-pointer">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-xl flex items-center justify-center shadow-sm">
-                                                        {att.contentType.includes('pdf') ? <Eye size={20} className="text-red-400" /> : <Paperclip size={20} className="text-slate-400" />}
-                                                    </div>
-                                                    <div className="min-w-0 flex-1">
-                                                        <p className="text-xs font-black text-slate-700 dark:text-slate-200 truncate uppercase tracking-tight">{att.filename}</p>
-                                                        <p className="text-[10px] font-bold text-slate-400 uppercase">{(att.size / 1024).toFixed(1)} KB</p>
-                                                    </div>
-                                                    <a href={att.url} download target="_blank" rel="noreferrer" className="p-2 text-slate-400 hover:text-green-600">
-                                                        <Download size={18} />
-                                                    </a>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Compose Dockable Window */}
+            {/* Global Compose Modal */}
             {showCompose && (
                 <GmailCompose
-                    theme={theme}
-                    onClose={() => setShowCompose(false)}
+                    onClose={() => {
+                        setShowCompose(false);
+                        setComposeTo('');
+                        setComposeSubject('');
+                        setComposeBody('');
+                        setComposeFiles([]);
+                    }}
                     initialTo={composeTo}
                     initialSubject={composeSubject}
                     initialBody={composeBody}
                     senderAccount={senderAccount}
-                    onSenderChange={setSenderAccount}
-                    availableAccounts={[
-                        ...AUTHORIZED_SENDERS,
-                        ...(auth.currentUser?.email && !AUTHORIZED_SENDERS.includes(auth.currentUser.email)
-                            ? [auth.currentUser.email]
-                            : [])
-                    ]}
+                    theme={theme}
+                    initialDraftId={draftIdToResume || null}
+                    availableAccounts={
+                        userProfile.email && ADMIN_USERS.includes(userProfile.email)
+                            ? ['ventas@ciaestrumetal.com', 'administracion@ciaestrumetal.com', userProfile.email]
+                            : (userProfile.email
+                                ? [userProfile.email]
+                                : [])
+                    }
                     onSend={async (data) => {
                         setIsSending(true);
                         try {
@@ -1874,7 +1938,7 @@ const MailPage = () => {
                             setComposeSubject('');
                             setComposeBody('');
                         } catch (e) {
-                            addToast('success', 'Error en el servidor');
+                            addToast('error', 'Error en el servidor');
                         } finally {
                             setIsSending(false);
                         }
@@ -2001,17 +2065,15 @@ const MailPage = () => {
             {/* Toasts / Notifications */}
             <div className="fixed bottom-6 right-6 z-[3000] flex flex-col gap-3">
                 {toasts.map(toast => (
-                    <div
-                        key={toast.id}
-                        className={`flex items-center gap-4 px-6 py-4 rounded-3xl shadow-2xl backdrop-blur-xl border border-white/20 animate-in slide-in-from-right fade-in duration-300 ${toast.type === 'success' ? 'bg-green-600/90 text-white' :
-                            toast.type === 'info' ? 'bg-blue-500/90 text-white' :
-                                'bg-blue-600/90 text-white'
-                            }`}
-                    >
+                    <div key={toast.id} className={`flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg border text-sm animate-in slide-in-from-bottom-5 fade-in ${toast.type === 'success' ? 'bg-green-50 text-green-700 border-green-200' :
+                        toast.type === 'error' ? 'bg-red-50 text-red-700 border-red-200' :
+                            toast.type === 'new' ? 'bg-[#C2E7FF] text-[#001D35] border-[#C2E7FF]' :
+                                'bg-blue-50 text-blue-700 border-blue-200'
+                        }`}>
                         {toast.type === 'success' ? <ShieldCheck size={20} /> : <Mail size={20} />}
                         <div>
                             <p className="text-[10px] font-black uppercase tracking-widest">
-                                {toast.type === 'success' ? 'Éxito' : toast.type === 'info' ? 'Info' : 'Notificación'}
+                                {toast.type === 'success' ? 'Éxito' : toast.type === 'info' ? 'Info' : toast.type === 'error' ? 'Error' : 'Notificación'}
                             </p>
                             <p className="text-[12px] font-bold">{toast.message}</p>
                         </div>
@@ -2032,7 +2094,7 @@ const MailPage = () => {
                     <GravatarHoverCard email={(clickedEmail || hoveredEmail)!} theme={theme} />
                 </div>
             )}
-        </>
+        </div>
     );
 };
 
